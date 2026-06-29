@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.env
+journal/*.db
+journal/*.db-*
+data/raw/
+data/processed/
+data/backtests/
+training/*.jsonl
+reports/*.html
+reports/*.json

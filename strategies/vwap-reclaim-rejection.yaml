@@ -1,0 +1,48 @@
+id: vwap-reclaim-rejection
+name: VWAP Reclaim / Rejection
+status: paper_only
+version: 0.1
+hypothesis: >
+  VWAP acts as an intraday control line. Reclaims after weakness and rejections after
+  strength can offer defined invalidation with favorable R when supported by volume
+  and broader intraday structure.
+market_universe:
+  asset_types: [us_stock, etf]
+  min_avg_daily_volume: 2000000
+  max_spread_pct: 0.15
+  exclude: [penny_stocks, low_float_manipulation_bait, options, crypto]
+timeframes:
+  active_window_et: "09:45-14:30"
+  signal_timeframes: [1m, 5m]
+setup_filters:
+  relative_volume_min: 1.2
+  avoid_chop: "Skip if price crosses VWAP repeatedly without structure"
+  prefer_clear_intraday_trend: true
+long_reclaim:
+  trigger: "Price moves from below VWAP to above VWAP and holds retest"
+  confirmation:
+    - "5m close above VWAP or clean retest bounce"
+    - "higher low forms near VWAP"
+    - "volume expands on reclaim or retest defense"
+short_rejection:
+  trigger: "Price moves into VWAP from below/above and rejects, depending on trend context"
+  confirmation:
+    - "failed reclaim or loss of VWAP"
+    - "lower high forms near VWAP"
+    - "selling volume expands on rejection"
+stop:
+  long: "Below reclaim/retest low or decisive VWAP loss"
+  short: "Above rejection high or decisive VWAP reclaim"
+targets:
+  primary: "1.5R-2R"
+  secondary: "prior intraday high/low, opening range boundary, or next support/resistance"
+exit_rules:
+  - "Exit if price decisively loses/reclaims VWAP against position"
+  - "Exit if chop invalidates structure"
+  - "Exit by 15:45 ET"
+  - "No overnight hold"
+metrics:
+  required: [r_multiple, expectancy, max_drawdown, profit_factor, adherence_rate]
+kill_conditions:
+  - "negative expectancy after 50 paper trades"
+  - "strategy mostly triggers in chop and cannot be filtered"

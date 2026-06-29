@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local/trading-lab/journal-schema.json",
+  "title": "Agentic Trading Lab Journal Entry",
+  "type": "object",
+  "required": [
+    "entry_id",
+    "mode",
+    "timestamp_et",
+    "ticker",
+    "strategy_id",
+    "direction",
+    "status",
+    "entry_plan",
+    "risk_plan",
+    "thesis",
+    "rule_checklist",
+    "metrics"
+  ],
+  "properties": {
+    "entry_id": { "type": "string" },
+    "mode": { "enum": ["proposal", "paper", "live"] },
+    "timestamp_et": { "type": "string", "description": "ISO-like Eastern Time timestamp" },
+    "ticker": { "type": "string" },
+    "strategy_id": { "type": "string" },
+    "direction": { "enum": ["long", "short"] },
+    "status": { "enum": ["proposed", "skipped", "entered", "exited", "cancelled", "invalidated"] },
+    "market_context": {
+      "type": "object",
+      "properties": {
+        "spy_trend": { "type": "string" },
+        "qqq_trend": { "type": "string" },
+        "sector_context": { "type": "string" },
+        "relative_volume": { "type": ["number", "null"] },
+        "news_or_catalyst": { "type": "string" },
+        "notes": { "type": "string" }
+      }
+    },
+    "entry_plan": {
+      "type": "object",
+      "required": ["trigger", "planned_entry", "order_type"],
+      "properties": {
+        "trigger": { "type": "string" },
+        "planned_entry": { "type": ["number", "null"] },
+        "order_type": { "enum": ["paper_market", "paper_limit", "live_market", "live_limit", "none"] },
+        "time_window_et": { "type": "string" }
+      }
+    },
+    "risk_plan": {
+      "type": "object",
+      "required": ["stop", "invalidation", "target", "planned_risk_r"],
+      "properties": {
+        "stop": { "type": ["number", "null"] },
+        "invalidation": { "type": "string" },
+        "target": { "type": ["number", "null"] },
+        "planned_risk_r": { "type": "number" },
+        "risk_dollars": { "type": ["number", "null"] },
+        "risk_pct_account": { "type": ["number", "null"] },
+        "position_size": { "type": ["number", "null"] }
+      }
+    },
+    "thesis": { "type": "string" },
+    "risk_officer_objection": { "type": "string" },
+    "reason_to_skip": { "type": "string" },
+    "rule_checklist": {
+      "type": "object",
+      "additionalProperties": { "type": "boolean" }
+    },
+    "execution": {
+      "type": "object",
+      "properties": {
+        "actual_entry": { "type": ["number", "null"] },
+        "actual_exit": { "type": ["number", "null"] },
+        "entry_time_et": { "type": "string" },
+        "exit_time_et": { "type": "string" },
+        "slippage": { "type": ["number", "null"] },
+        "fees": { "type": ["number", "null"] }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "required": ["planned_r_multiple", "actual_r_multiple", "pnl", "rule_adherent"],
+      "properties": {
+        "planned_r_multiple": { "type": ["number", "null"] },
+        "actual_r_multiple": { "type": ["number", "null"] },
+        "pnl": { "type": ["number", "null"] },
+        "rule_adherent": { "type": "boolean" },
+        "mistake_category": { "type": "string" }
+      }
+    },
+    "postmortem": {
+      "type": "object",
+      "properties": {
+        "what_happened": { "type": "string" },
+        "what_worked": { "type": "string" },
+        "what_failed": { "type": "string" },
+        "lesson": { "type": "string" },
+        "strategy_change_recommended": { "type": "boolean" }
+      }
+    },
+    "agent_metadata": {
+      "type": "object",
+      "properties": {
+        "proposed_by": { "type": "string" },
+        "reviewed_by": { "type": "string" },
+        "model_used": { "type": "string" },
+        "data_sources": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

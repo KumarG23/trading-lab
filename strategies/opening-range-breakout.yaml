@@ -1,0 +1,47 @@
+id: opening-range-breakout
+name: Opening Range Breakout
+status: paper_only
+version: 0.1
+hypothesis: >
+  Liquid stocks with elevated relative volume that break the first 5/15 minute range
+  in the direction of intraday momentum can produce asymmetric R when stops are kept
+  tight and failed breakouts are exited quickly.
+market_universe:
+  asset_types: [us_stock, etf]
+  min_avg_daily_volume: 2000000
+  max_spread_pct: 0.15
+  exclude: [penny_stocks, low_float_manipulation_bait, options, crypto]
+timeframes:
+  opening_range_minutes: [5, 15]
+  active_window_et: "09:35-11:00"
+setup_filters:
+  relative_volume_min: 1.5
+  price_above_vwap_for_longs: true
+  price_below_vwap_for_shorts: true
+  avoid_first_minute_chase: true
+long_entry:
+  trigger: "Break above opening range high with volume confirmation"
+  confirmation:
+    - "candle closes above range high OR retest holds range high"
+    - "volume on breakout candle above recent intraday average"
+short_entry:
+  trigger: "Break below opening range low with volume confirmation"
+  confirmation:
+    - "candle closes below range low OR retest rejects range low"
+    - "volume on breakdown candle above recent intraday average"
+stop:
+  default: "Opposite side of breakout candle or back inside opening range"
+  max_risk_rule: "Skip if stop distance makes position sizing impossible inside risk policy"
+targets:
+  primary: "2R"
+  secondary: "VWAP extension, prior day high/low, or measured range extension"
+exit_rules:
+  - "Exit immediately on failed breakout back inside range after entry confirmation"
+  - "Exit by 15:45 ET in paper/live intraday mode"
+  - "No overnight hold"
+metrics:
+  required: [r_multiple, expectancy, max_drawdown, profit_factor, adherence_rate]
+kill_conditions:
+  - "negative expectancy after 50 paper trades"
+  - "profit factor below 1.0 after 50 paper trades"
+  - "adherence below 80% without fixable rule ambiguity"

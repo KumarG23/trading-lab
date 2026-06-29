@@ -1,0 +1,49 @@
+id: momentum-pullback
+name: Momentum Pullback
+status: paper_only
+version: 0.1
+hypothesis: >
+  Liquid stocks with strong intraday momentum and elevated volume often offer better
+  R on controlled pullbacks than on chasing extensions.
+market_universe:
+  asset_types: [us_stock, etf]
+  min_avg_daily_volume: 3000000
+  max_spread_pct: 0.12
+  exclude: [penny_stocks, low_float_manipulation_bait, options, crypto]
+timeframes:
+  active_window_et: "09:45-15:00"
+  trend_timeframes: [5m, 15m]
+setup_filters:
+  relative_volume_min: 1.5
+  trend_required: true
+  long_context:
+    - "price above VWAP"
+    - "higher highs and higher lows"
+    - "pullback does not break major intraday structure"
+  short_context:
+    - "price below VWAP"
+    - "lower highs and lower lows"
+    - "bounce does not reclaim major intraday structure"
+long_entry:
+  trigger: "Pullback into VWAP/EMA/support then reclaim of micro-structure high"
+  avoid: "Do not buy vertical extension without pullback"
+short_entry:
+  trigger: "Bounce into VWAP/EMA/resistance then loss of micro-structure low"
+  avoid: "Do not short vertical flush without bounce"
+stop:
+  long: "Below pullback low or structure break"
+  short: "Above bounce high or structure reclaim"
+targets:
+  primary: "2R"
+  secondary: "prior high/low retest, trend continuation extension"
+exit_rules:
+  - "Exit if structure breaks against position"
+  - "Take no new entries if momentum has clearly faded"
+  - "Exit by 15:45 ET"
+  - "No overnight hold"
+metrics:
+  required: [r_multiple, expectancy, max_drawdown, profit_factor, adherence_rate]
+kill_conditions:
+  - "negative expectancy after 50 paper trades"
+  - "average loss exceeds average win due to late entries"
+  - "adherence below 80% due to chase behavior"

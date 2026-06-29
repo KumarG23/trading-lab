@@ -1,0 +1,26 @@
+[
+  {
+    "ticker": "AAPL",
+    "asset_class": "stock",
+    "direction": "long",
+    "strategy_id": "opening-range-breakout",
+    "trigger": "sample candidate: breaks 5m high on volume",
+    "planned_entry": 101.0,
+    "stop": 100.0,
+    "target": 103.0,
+    "risk_dollars": 10.0,
+    "data_sources": ["synthetic-smoke-test"]
+  },
+  {
+    "ticker": "BTC-USD",
+    "asset_class": "crypto",
+    "direction": "long",
+    "strategy_id": "momentum-pullback",
+    "trigger": "should be rejected by phase-one policy",
+    "planned_entry": 100.0,
+    "stop": 98.0,
+    "target": 106.0,
+    "risk_dollars": 10.0,
+    "data_sources": ["synthetic-smoke-test"]
+  }
+]
