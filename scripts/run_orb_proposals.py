@@ -16,8 +16,8 @@ from trading_lab.autonomous_runner import AutonomousRunner  # noqa: E402
 from trading_lab.config import LabConfig  # noqa: E402
 from trading_lab.journal_store import JournalStore  # noqa: E402
 from trading_lab.local_worker import LocalAIWorker  # noqa: E402
-from trading_lab.opening_range_breakout import generate_orb_candidates  # noqa: E402
 from trading_lab.paper_lifecycle import market_is_open, update_paper_positions  # noqa: E402
+from trading_lab.strategy_suite import generate_strategy_candidates  # noqa: E402
 from trading_lab.training_memory import TrainingMemory  # noqa: E402
 
 ET = ZoneInfo("America/New_York")
@@ -30,6 +30,7 @@ def main() -> int:
     parser.add_argument("--db", type=Path, default=ROOT / "journal" / "trading-lab.db")
     parser.add_argument("--risk-dollars", type=float, default=None, help="Risk per proposal. Defaults to 1% of configured paper equity.")
     parser.add_argument("--opening-range-minutes", type=int, default=5)
+    parser.add_argument("--strategies", default="orb,vwap", help="Comma-separated strategy aliases: orb,vwap")
     parser.add_argument("--no-local-ai", action="store_true")
     parser.add_argument("--ignore-market-hours", action="store_true")
     parser.add_argument("--quiet-no-events", action="store_true", help="Print nothing when no proposals/lifecycle events occur")
@@ -58,7 +59,15 @@ def main() -> int:
 
     lifecycle = update_paper_positions(store, bars)
     risk_dollars = args.risk_dollars if args.risk_dollars is not None else round(cfg.account_equity * 0.01, 2)
-    candidates = generate_orb_candidates(bars, opening_range_minutes=args.opening_range_minutes, risk_dollars=risk_dollars)
+    strategies = [s.strip().lower() for s in args.strategies.split(",") if s.strip()]
+    candidates = generate_strategy_candidates(
+        bars,
+        symbols=symbols,
+        enabled_strategies=strategies,
+        risk_dollars=risk_dollars,
+        opening_range_minutes=args.opening_range_minutes,
+        account_equity=cfg.account_equity,
+    )
 
     training_memory = TrainingMemory(ROOT / "training" / "claude_bot_sanitized_examples.jsonl")
     worker = None if args.no_local_ai else LocalAIWorker(
@@ -74,6 +83,7 @@ def main() -> int:
         "broker_orders": 0,
         "paper_equity": cfg.account_equity,
         "risk_dollars": risk_dollars,
+        "strategies": strategies,
         "symbols": symbols,
         "bars": len(bars),
         "candidates": len(candidates),
