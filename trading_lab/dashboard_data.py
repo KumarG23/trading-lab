@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime
+import json
+from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -17,6 +19,7 @@ def build_dashboard_snapshot(
     account_equity: float,
     live_enabled: bool,
     broker_orders_enabled: bool = False,
+    scanner_path: str | Path | None = None,
 ) -> dict[str, Any]:
     proposals = store.list_proposals()
     positions = store.list_paper_positions()
@@ -25,6 +28,7 @@ def build_dashboard_snapshot(
     proposals_by_strategy = dict(sorted(Counter(p["strategy_id"] for p in proposals).items()))
     positions_by_status = dict(sorted(Counter(p["status"] for p in positions).items()))
     metrics = summarize_trades(trades)
+    scanner = _load_scanner(scanner_path)
     return {
         "generated_at": datetime.now(ET).isoformat(timespec="seconds"),
         "mode": "paper_proposal_only_no_orders" if not broker_orders_enabled else "broker_paper_execution",
@@ -46,8 +50,23 @@ def build_dashboard_snapshot(
         "active_positions": [_position_card(p) for p in active_positions[-12:]],
         "latest_proposals": [_proposal_card(p) for p in proposals[-20:]][::-1],
         "latest_trades": [_trade_card(t) for t in trades[-20:]][::-1],
+        "scanner": scanner,
         "readiness": _readiness(live_enabled=live_enabled, broker_orders_enabled=broker_orders_enabled, trades=trades, proposals=proposals),
     }
+
+
+def _load_scanner(scanner_path: str | Path | None) -> dict[str, Any]:
+    if scanner_path is None:
+        return {"available": False, "watchlist": [], "top_matches": []}
+    path = Path(scanner_path)
+    if not path.exists():
+        return {"available": False, "watchlist": [], "top_matches": [], "path": str(path)}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"available": False, "watchlist": [], "top_matches": [], "path": str(path), "error": "invalid_json"}
+    payload["available"] = True
+    return payload
 
 
 def _readiness(*, live_enabled: bool, broker_orders_enabled: bool, trades: list[dict[str, Any]], proposals: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:

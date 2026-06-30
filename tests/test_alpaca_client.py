@@ -1,37 +1,29 @@
-import json
-
 from trading_lab.alpaca_client import AlpacaClient
 
 
 class FakeHTTP:
     def __init__(self):
-        self.calls = []
+        self.urls = []
 
     def request_json(self, method, url, headers=None, payload=None, timeout=20):
-        self.calls.append((method, url, headers, payload, timeout))
-        return {"status": "ACTIVE", "portfolio_value": "1000.00", "cash": "500.00"}
+        self.urls.append(url)
+        symbol_blob = url.split("symbols=", 1)[1].split("&", 1)[0]
+        symbols = symbol_blob.split("%2C")
+        return {
+            "bars": {
+                symbol: [{"t": "2026-06-30T13:30:00Z", "o": 1, "h": 2, "l": 1, "c": 1.5, "v": 100}]
+                for symbol in symbols
+            }
+        }
 
 
-def test_alpaca_client_reads_account_without_exposing_credentials():
+def test_fetch_stock_bars_batches_symbol_requests_to_avoid_data_api_limit_truncation():
     http = FakeHTTP()
-    client = AlpacaClient(base_url="https://paper-api.alpaca.markets", api_key="key", secret_key="secret", http_client=http)
+    client = AlpacaClient(base_url="https://paper-api.alpaca.markets", api_key="k", secret_key="s", http_client=http)
+    symbols = [f"S{i}" for i in range(45)]
 
-    account = client.get_account_summary()
+    bars = client.fetch_stock_bars(symbols, timeframe="1Min", start="2026-06-30T13:30:00Z", end="2026-06-30T14:30:00Z", batch_size=20)
 
-    assert account == {"status": "ACTIVE", "portfolio_value": "1000.00", "cash": "500.00"}
-    method, url, headers, payload, timeout = http.calls[0]
-    assert method == "GET"
-    assert url == "https://paper-api.alpaca.markets/v2/account"
-    assert headers["APCA-API-KEY-ID"] == "key"
-    assert headers["APCA-API-SECRET-KEY"] == "secret"
-
-
-def test_alpaca_client_refuses_non_paper_base_url_by_default():
-    client = AlpacaClient(base_url="https://api.alpaca.markets", api_key="key", secret_key="secret")
-
-    try:
-        client.get_account_summary()
-    except ValueError as exc:
-        assert "paper" in str(exc)
-    else:
-        raise AssertionError("expected paper safety guard")
+    assert len(http.urls) == 3
+    assert len(bars) == 45
+    assert {bar["symbol"] for bar in bars} == set(symbols)

@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 DB = ROOT / "journal" / "trading-lab.db"
+SCANNER = ROOT / "data" / "processed" / "scanner-watchlist.json"
 ET = ZoneInfo("America/New_York")
 
 
@@ -28,6 +29,7 @@ def main() -> int:
     active = [p for p in positions if p["status"] in {"pending_entry", "open"}]
     by_strategy = Counter(p["strategy_id"] for p in proposals)
     by_status = Counter(p["status"] for p in positions)
+    scanner = _load_scanner()
     closed_today = [p for p in positions if p["closed_at"] and str(p["closed_at"]) >= session_start and p["status"] == "closed"]
     total_r = sum(float(p["r_multiple"] or 0) for p in closed_today)
     total_pnl = sum(float(p["pnl"] or 0) for p in closed_today)
@@ -39,7 +41,13 @@ def main() -> int:
         f"Active simulated positions: {len(active)}",
         f"All position statuses: {dict(sorted(by_status.items()))}",
         f"Today's proposals by strategy: {dict(sorted(by_strategy.items()))}",
+        f"Scanner watchlist: {', '.join(scanner.get('watchlist', [])[:15]) if scanner.get('watchlist') else 'not generated yet'}",
     ]
+    if scanner.get("top_matches"):
+        lines.append("Scanner top matches:")
+        for row in scanner["top_matches"][:5]:
+            reasons = ", ".join(row.get("why", []))
+            lines.append(f"- {row['symbol']} score {row['score']} price {row['price']} change {row['change_pct']}% RVOL {row['relative_volume']} — {reasons}")
     if active:
         lines.append("Active:")
         for pos in active[-5:]:
@@ -56,6 +64,15 @@ def main() -> int:
             )
     print("\n".join(lines))
     return 0
+
+
+def _load_scanner() -> dict:
+    if not SCANNER.exists():
+        return {}
+    try:
+        return json.loads(SCANNER.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
 
 
 if __name__ == "__main__":

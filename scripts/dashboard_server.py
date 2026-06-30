@@ -69,14 +69,22 @@ class Handler(BaseHTTPRequestHandler):
 def _snapshot() -> dict:
     cfg = LabConfig.from_env_file(ROOT / ".env")
     store = JournalStore(DB_PATH)
-    return build_dashboard_snapshot(store, account_equity=cfg.account_equity, live_enabled=cfg.live_trading_enabled)
+    return build_dashboard_snapshot(
+        store,
+        account_equity=cfg.account_equity,
+        live_enabled=cfg.live_trading_enabled,
+        scanner_path=ROOT / "data" / "processed" / "scanner-watchlist.json",
+    )
 
 
 def render_dashboard(snapshot: dict) -> str:
-    active = "".join(_position_html(p) for p in snapshot["active_positions"]) or '<div class="empty">No active simulated positions.</div>'
+    active = "".join(_position_html(p) for p in snapshot["active_positions"]) or '<div class="empty">No active simulated positions. The goblins are contained.</div>'
     proposals = "".join(_proposal_html(p) for p in snapshot["latest_proposals"][:10]) or '<div class="empty">No proposals logged yet.</div>'
     readiness = "".join(_readiness_html(k, v) for k, v in snapshot["readiness"].items())
     by_strategy = "".join(f'<div class="pill"><span>{k}</span><strong>{v}</strong></div>' for k, v in snapshot["proposals_by_strategy"].items()) or '<div class="empty">No strategy counts.</div>'
+    scanner = snapshot.get("scanner") or {}
+    scanner_cards = "".join(_scanner_html(row) for row in scanner.get("top_matches", [])[:8]) or '<div class="empty">Scanner has not run yet.</div>'
+    scanner_watchlist = ", ".join(scanner.get("watchlist", [])[:30]) or "fallback watchlist"
     metrics = snapshot["metrics"]
     return f"""<!doctype html>
 <html lang="en">
@@ -84,55 +92,67 @@ def render_dashboard(snapshot: dict) -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="refresh" content="60">
-<title>Agentic Trading Lab</title>
+<title>Market Goblin Containment</title>
 <style>
-:root {{ --bg:#080b10; --panel:#101722; --panel2:#0c111a; --text:#e7f0ff; --muted:#8fa2bd; --green:#2ee59d; --red:#ff5c7a; --amber:#ffd166; --blue:#6aa9ff; --purple:#a78bfa; --line:#1d2a3a; }}
+:root {{ --bg:#05020b; --void:#080510; --panel:#11101f; --panel2:#17152a; --text:#f4f0ff; --muted:#a9a0c6; --green:#31f29a; --red:#ff4d7d; --amber:#ffd166; --cyan:#66e6ff; --purple:#8b5cf6; --purple2:#7132f5; --line:rgba(167,139,250,.22); }}
 * {{ box-sizing:border-box; }}
-body {{ margin:0; background:radial-gradient(circle at top left,#132238 0,#080b10 38%,#05070b 100%); color:var(--text); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }}
-main {{ max-width:1440px; margin:0 auto; padding:28px; }}
-header {{ display:flex; justify-content:space-between; gap:18px; align-items:flex-end; margin-bottom:22px; }}
-h1 {{ margin:0; font-size:34px; letter-spacing:-0.04em; }}
-.sub {{ color:var(--muted); margin-top:6px; }}
-.badge {{ padding:8px 12px; border:1px solid var(--line); border-radius:999px; background:rgba(16,23,34,.78); color:var(--green); font-weight:700; }}
-.grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; }}
-.card {{ background:linear-gradient(180deg,rgba(16,23,34,.94),rgba(9,13,20,.94)); border:1px solid var(--line); border-radius:22px; padding:18px; box-shadow:0 24px 70px rgba(0,0,0,.35); }}
-.kpi .label {{ color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.12em; }}
-.kpi .value {{ font-size:34px; font-weight:800; margin-top:8px; letter-spacing:-.05em; }}
-.kpi .hint {{ color:var(--muted); margin-top:4px; }}
-.section {{ margin-top:16px; }}
-.section h2 {{ margin:0 0 12px; font-size:18px; letter-spacing:-.02em; }}
-.wide {{ grid-column:span 2; }}
-.full {{ grid-column:1 / -1; }}
+body {{ margin:0; min-height:100vh; color:var(--text); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background: radial-gradient(circle at 18% 10%, rgba(113,50,245,.34), transparent 30%), radial-gradient(circle at 80% 0%, rgba(49,242,154,.16), transparent 24%), linear-gradient(135deg,#030208 0%,#09051a 55%,#12091f 100%); }}
+body:before {{ content:""; position:fixed; inset:0; pointer-events:none; opacity:.12; background-image:linear-gradient(rgba(255,255,255,.08) 1px, transparent 1px),linear-gradient(90deg,rgba(255,255,255,.08) 1px, transparent 1px); background-size:42px 42px; mask-image:linear-gradient(to bottom,#000,transparent 78%); }}
+main {{ max-width:1520px; margin:0 auto; padding:28px; position:relative; }}
+header {{ display:grid; grid-template-columns:1fr auto; gap:22px; align-items:end; margin-bottom:20px; }}
+.eyebrow {{ color:var(--green); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.22em; text-transform:uppercase; font-size:12px; }}
+h1 {{ margin:4px 0 0; font-size:46px; line-height:.95; letter-spacing:-.07em; }}
+.sub {{ color:var(--muted); margin-top:10px; max-width:820px; }}
+.badge {{ padding:11px 14px; border:1px solid rgba(49,242,154,.35); border-radius:12px; background:rgba(49,242,154,.09); color:var(--green); font-weight:800; box-shadow:0 0 28px rgba(49,242,154,.08); }}
+.grid {{ display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:14px; }}
+.card {{ background:linear-gradient(180deg,rgba(23,21,42,.92),rgba(8,5,16,.92)); border:1px solid var(--line); border-radius:22px; padding:18px; box-shadow:0 24px 70px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.04); }}
+.kpi {{ grid-column:span 3; min-height:128px; position:relative; overflow:hidden; }}
+.kpi:after {{ content:""; position:absolute; right:-28px; bottom:-42px; width:120px; height:120px; border-radius:50%; background:radial-gradient(circle,rgba(113,50,245,.34),transparent 62%); }}
+.kpi .label {{ color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.16em; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }}
+.kpi .value {{ font-size:38px; font-weight:900; margin-top:10px; letter-spacing:-.06em; }}
+.kpi .hint {{ color:var(--muted); margin-top:4px; font-size:13px; }}
+.section h2 {{ margin:0 0 12px; font-size:18px; letter-spacing:-.03em; display:flex; align-items:center; gap:8px; }}
+.wide {{ grid-column:span 6; }} .full {{ grid-column:1 / -1; }} .third {{ grid-column:span 4; }}
+.hero {{ grid-column:span 8; min-height:260px; position:relative; overflow:hidden; }}
+.radar {{ position:absolute; right:18px; top:18px; width:170px; height:170px; border-radius:50%; border:1px solid rgba(102,230,255,.25); background:repeating-radial-gradient(circle,transparent 0 24px,rgba(102,230,255,.12) 25px 26px), conic-gradient(from 70deg,rgba(49,242,154,.42),transparent 35%,transparent); filter:drop-shadow(0 0 24px rgba(102,230,255,.18)); }}
+.radar:after {{ content:""; position:absolute; inset:50% auto auto 50%; width:6px; height:6px; border-radius:50%; background:var(--green); box-shadow:36px -42px 0 var(--cyan), -50px 28px 0 var(--purple), 22px 48px 0 var(--amber); }}
 .list {{ display:grid; gap:10px; }}
-.row {{ display:grid; grid-template-columns:auto 1fr auto; gap:12px; align-items:center; padding:12px; border:1px solid var(--line); border-radius:16px; background:rgba(255,255,255,.025); }}
-.sym {{ font-weight:900; color:var(--blue); }}
+.row {{ display:grid; grid-template-columns:72px 1fr auto; gap:12px; align-items:center; padding:12px; border:1px solid rgba(167,139,250,.17); border-radius:16px; background:rgba(255,255,255,.035); }}
+.sym {{ font-weight:950; color:var(--cyan); letter-spacing:.02em; }}
 .meta {{ color:var(--muted); font-size:13px; }}
-.price {{ font-variant-numeric:tabular-nums; color:#dce8ff; }}
+.price {{ font-variant-numeric:tabular-nums; color:#f4f0ff; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }}
 .pills {{ display:flex; flex-wrap:wrap; gap:10px; }}
-.pill {{ display:flex; gap:10px; align-items:center; padding:10px 12px; border:1px solid var(--line); border-radius:999px; background:rgba(255,255,255,.035); color:var(--muted); }}
+.pill {{ display:flex; gap:10px; align-items:center; padding:10px 12px; border:1px solid rgba(167,139,250,.20); border-radius:12px; background:rgba(113,50,245,.10); color:var(--muted); }}
 .pill strong {{ color:var(--text); }}
-.ready {{ display:grid; grid-template-columns:180px 110px 1fr; gap:10px; padding:12px; border-radius:16px; border:1px solid var(--line); background:rgba(255,255,255,.025); }}
+.ready {{ display:grid; grid-template-columns:180px 110px 1fr; gap:10px; padding:12px; border-radius:16px; border:1px solid rgba(167,139,250,.17); background:rgba(255,255,255,.035); }}
 .status-ok {{ color:var(--green); }} .status-blocked,.status-insufficient,.status-forbidden {{ color:var(--amber); }} .status-armed {{ color:var(--red); }}
-.empty {{ color:var(--muted); padding:12px; border:1px dashed var(--line); border-radius:16px; }}
-footer {{ color:var(--muted); margin-top:18px; font-size:12px; }}
-@media (max-width:900px) {{ .grid {{ grid-template-columns:1fr; }} .wide,.full {{ grid-column:auto; }} header {{ display:block; }} .ready {{ grid-template-columns:1fr; }} }}
+.empty {{ color:var(--muted); padding:12px; border:1px dashed rgba(167,139,250,.26); border-radius:16px; }}
+.scanner {{ grid-column:span 4; }}
+.scan-row {{ display:grid; grid-template-columns:64px 1fr 58px; gap:10px; padding:10px 0; border-bottom:1px solid rgba(167,139,250,.12); }}
+.scan-row:last-child {{ border-bottom:0; }}
+.score {{ color:var(--green); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; text-align:right; }}
+.watchlist {{ color:var(--muted); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; line-height:1.55; }}
+footer {{ color:var(--muted); margin-top:18px; font-size:12px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }}
+@media (max-width:1000px) {{ .grid {{ grid-template-columns:1fr; }} .kpi,.wide,.full,.third,.hero,.scanner {{ grid-column:auto; }} header {{ grid-template-columns:1fr; }} .ready,.row {{ grid-template-columns:1fr; }} .radar {{ opacity:.2; }} }}
 </style>
 </head>
 <body>
 <main>
 <header>
-  <div><h1>Agentic Trading Lab</h1><div class="sub">Paper proposal mode. Deterministic rules first; AI in the review chair, not the cockpit.</div></div>
+  <div><div class="eyebrow">Jarvis Market Goblin Containment Unit</div><h1>Agentic Trading Lab</h1><div class="sub">Dynamic scanner → deterministic strategies → paper journal. AI gets a clipboard, not the launch codes.</div></div>
   <div class="badge">LIVE TRADING DISABLED</div>
 </header>
 <section class="grid">
+  <div class="card hero"><div class="radar"></div><h2>Today's scanner watchlist</h2><p class="watchlist">{scanner_watchlist}</p><div class="pills"><div class="pill"><span>Universe scanned</span><strong>{scanner.get('scan_universe_count', 0)}</strong></div><div class="pill"><span>Top matches</span><strong>{len(scanner.get('top_matches', []))}</strong></div><div class="pill"><span>Generated</span><strong>{scanner.get('generated_at', 'not yet')}</strong></div></div></div>
+  <div class="card scanner"><h2>Radar pings</h2>{scanner_cards}</div>
   {_kpi('Proposals', snapshot['counts']['proposals'], 'all logged proposals')}
   {_kpi('Active', snapshot['counts']['active_positions'], 'simulated positions')}
   {_kpi('Trades', snapshot['metrics']['trade_count'], 'closed paper trades')}
   {_kpi('Expectancy R', snapshot['metrics']['expectancy_r'], 'average R/trade')}
   {_kpi('Total R', snapshot['metrics']['total_r'], 'closed paper trades')}
-  {_kpi('PnL', f"${snapshot['metrics']['total_pnl']:.2f}", 'simulated only')}
-  {_kpi('Profit Factor', snapshot['metrics']['profit_factor'], 'gross win / gross loss')}
-  {_kpi('Rule Adherence', f"{snapshot['metrics']['rule_adherence_rate']:.0%}", 'closed trades')}
+  {_kpi('PnL', f"${metrics['total_pnl']:.2f}", 'simulated only')}
+  {_kpi('Profit Factor', metrics['profit_factor'], 'gross win / gross loss')}
+  {_kpi('Rule Adherence', f"{metrics['rule_adherence_rate']:.0%}", 'closed trades')}
   <div class="card wide section"><h2>Active simulated positions</h2><div class="list">{active}</div></div>
   <div class="card wide section"><h2>Latest proposals</h2><div class="list">{proposals}</div></div>
   <div class="card wide section"><h2>Proposals by strategy</h2><div class="pills">{by_strategy}</div></div>
@@ -154,6 +174,11 @@ def _position_html(p: dict) -> str:
 
 def _proposal_html(p: dict) -> str:
     return f'<div class="row"><div class="sym">{p["ticker"]}</div><div><strong>{p["strategy_id"]}</strong><div class="meta">{p["trigger"]}</div></div><div class="price">{p["entry"]} → {p["target"]}</div></div>'
+
+
+def _scanner_html(row: dict) -> str:
+    why = ", ".join(row.get("why", [])) or "candidate"
+    return f'<div class="scan-row"><div class="sym">{row["symbol"]}</div><div><strong>${row.get("price", "?")}</strong><div class="meta">{why} · {row.get("change_pct", 0):+}% · RVOL {row.get("relative_volume", 0)}</div></div><div class="score">{row.get("score", 0)}</div></div>'
 
 
 def _readiness_html(key: str, item: dict) -> str:

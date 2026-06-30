@@ -78,25 +78,29 @@ class AlpacaClient:
         end: str,
         feed: str = "iex",
         data_url: str = "https://data.alpaca.markets",
+        batch_size: int = 25,
     ) -> list[dict[str, Any]]:
         self._require_paper()
         normalized_symbols = [symbol.upper() for symbol in symbols]
-        query = urlencode(
-            {
-                "symbols": ",".join(normalized_symbols),
-                "timeframe": timeframe,
-                "start": start,
-                "end": end,
-                "feed": feed,
-                "limit": 10000,
-            }
-        )
-        payload = self.http.request_json(
-            "GET",
-            f"{data_url.rstrip('/')}/v2/stocks/bars?{query}",
-            headers=self._headers(),
-        )
-        return _normalize_bars(payload.get("bars") or {})
+        bars: list[dict[str, Any]] = []
+        for batch in _chunks(normalized_symbols, batch_size):
+            query = urlencode(
+                {
+                    "symbols": ",".join(batch),
+                    "timeframe": timeframe,
+                    "start": start,
+                    "end": end,
+                    "feed": feed,
+                    "limit": 10000,
+                }
+            )
+            payload = self.http.request_json(
+                "GET",
+                f"{data_url.rstrip('/')}/v2/stocks/bars?{query}",
+                headers=self._headers(),
+            )
+            bars.extend(_normalize_bars(payload.get("bars") or {}))
+        return sorted(bars, key=lambda item: (item["symbol"], item["timestamp"]))
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -109,6 +113,12 @@ class AlpacaClient:
             return
         if "paper-api" not in self.base_url:
             raise ValueError("Refusing non-paper Alpaca base URL without allow_live=True")
+
+
+def _chunks(items: list[str], size: int) -> list[list[str]]:
+    if size <= 0:
+        size = len(items) or 1
+    return [items[index : index + size] for index in range(0, len(items), size)]
 
 
 def _normalize_bars(raw_bars: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:

@@ -35,7 +35,7 @@ Required:
 - EOD flattening and no-new-trade cutoff rules.
 - Slippage/spread assumptions in backtests.
 - Strategy-level metrics: expectancy R, profit factor, drawdown, trade count, rule adherence.
-- Dashboard/API showing bot status, proposals, positions, metrics, and readiness.
+- Dashboard/API showing bot status, proposals, positions, metrics, scanner watchlist, and readiness.
 
 ### Gate B — broker-paper execution
 
@@ -94,6 +94,8 @@ Only after statistically meaningful logged performance:
 
 The dashboard should be visual-first and boringly truthful:
 
+- Today's dynamic scanner watchlist.
+- Top scanner matches and reasons.
 - Bot mode and safety state.
 - Active simulated positions.
 - Today’s proposals by strategy.

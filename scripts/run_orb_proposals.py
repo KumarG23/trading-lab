@@ -19,6 +19,7 @@ from trading_lab.local_worker import LocalAIWorker  # noqa: E402
 from trading_lab.paper_lifecycle import market_is_open, update_paper_positions  # noqa: E402
 from trading_lab.strategy_suite import generate_strategy_candidates  # noqa: E402
 from trading_lab.training_memory import TrainingMemory  # noqa: E402
+from trading_lab.watchlist import load_symbols  # noqa: E402
 
 ET = ZoneInfo("America/New_York")
 DEFAULT_WATCHLIST = ["AAPL", "MSFT", "NVDA", "AMD", "TSLA", "META", "AMZN", "GOOGL", "SPY", "QQQ"]
@@ -26,7 +27,8 @@ DEFAULT_WATCHLIST = ["AAPL", "MSFT", "NVDA", "AMD", "TSLA", "META", "AMZN", "GOO
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate and log Alpaca paper/proposal ORB candidates. Places no broker orders.")
-    parser.add_argument("--symbols", default=",".join(DEFAULT_WATCHLIST), help="Comma-separated symbols")
+    parser.add_argument("--symbols", default=",".join(DEFAULT_WATCHLIST), help="Comma-separated fallback symbols")
+    parser.add_argument("--watchlist-file", type=Path, default=ROOT / "data" / "processed" / "scanner-watchlist.json", help="Dynamic scanner watchlist JSON; falls back to --symbols if missing")
     parser.add_argument("--db", type=Path, default=ROOT / "journal" / "trading-lab.db")
     parser.add_argument("--risk-dollars", type=float, default=None, help="Risk per proposal. Defaults to 1% of configured paper equity.")
     parser.add_argument("--opening-range-minutes", type=int, default=5)
@@ -48,7 +50,7 @@ def main() -> int:
         _emit({"ok": True, "mode": "paper_proposal_only_no_orders", "skipped": "market_closed", "time_et": now_et.isoformat(timespec="seconds")}, args.quiet_no_events)
         return 0
 
-    symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
+    symbols = load_symbols(args.symbols, watchlist_file=args.watchlist_file)
     market_open_et = datetime.combine(now_et.date(), time(9, 30), ET)
     start = market_open_et.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     end = now_et.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
