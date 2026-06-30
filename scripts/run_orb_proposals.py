@@ -57,7 +57,12 @@ def main() -> int:
     bars = client.fetch_stock_bars(symbols, timeframe="1Min", start=start, end=end)
     store = JournalStore(args.db)
 
-    lifecycle = update_paper_positions(store, bars)
+    lifecycle = update_paper_positions(
+        store,
+        bars,
+        no_new_entries_after="11:30",
+        flatten_at="15:45",
+    )
     risk_dollars = args.risk_dollars if args.risk_dollars is not None else round(cfg.account_equity * 0.01, 2)
     strategies = [s.strip().lower() for s in args.strategies.split(",") if s.strip()]
     candidates = generate_strategy_candidates(

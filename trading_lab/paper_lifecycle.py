@@ -15,6 +15,9 @@ def update_paper_positions(
     bars: list[dict[str, Any]],
     *,
     expire_after_minutes: int = 120,
+    now: datetime | None = None,
+    no_new_entries_after: str | None = None,
+    flatten_at: str | None = None,
 ) -> dict[str, Any]:
     """Advance simulated paper positions using OHLCV bars.
 
@@ -26,7 +29,9 @@ def update_paper_positions(
     by_symbol = _bars_by_symbol(bars)
     events: list[dict[str, Any]] = []
     active = store.list_active_paper_positions()
-    now = datetime.now(ET)
+    now = now or datetime.now(ET)
+    cutoff_time = _parse_clock(no_new_entries_after)
+    flatten_time = _parse_clock(flatten_at)
 
     for pos in active:
         symbol_bars = by_symbol.get(str(pos["ticker"]).upper(), [])
@@ -41,6 +46,10 @@ def update_paper_positions(
         created_at = _parse_dt(str(pos["created_at"]))
 
         entered_at = _parse_dt(str(pos["entered_at"])) if pos.get("entered_at") else None
+        if status == "pending_entry" and cutoff_time is not None and now.time() >= cutoff_time:
+            store.expire_position(position_id, closed_at=now.isoformat(timespec="seconds"), reason="no_new_entries_after_cutoff")
+            events.append({"type": "expired_cutoff", "position_id": position_id, "ticker": pos["ticker"]})
+            continue
         for bar in symbol_bars:
             ts = str(bar["timestamp"])
             bar_dt = _parse_dt(ts)
@@ -93,6 +102,21 @@ def update_paper_positions(
         if status == "pending_entry" and created_at is not None and (now - created_at).total_seconds() >= expire_after_minutes * 60:
             store.expire_position(position_id, closed_at=now.isoformat(timespec="seconds"), reason="expired_without_entry")
             events.append({"type": "expired", "position_id": position_id, "ticker": pos["ticker"]})
+        elif status == "open" and flatten_time is not None and now.time() >= flatten_time:
+            last_bar = symbol_bars[-1]
+            trade_id = store.close_position(
+                position_id,
+                closed_at=now.isoformat(timespec="seconds"),
+                exit_price=float(last_bar["close"]),
+                exit_reason="eod_flatten",
+            )
+            events.append({
+                "type": "flattened_eod",
+                "position_id": position_id,
+                "trade_id": trade_id,
+                "ticker": pos["ticker"],
+                "price": float(last_bar["close"]),
+            })
 
     return {"events": events, "event_count": len(events), "active_positions": len(store.list_active_paper_positions())}
 
@@ -120,3 +144,10 @@ def _parse_dt(value: str) -> datetime | None:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=ET)
     return parsed.astimezone(ET)
+
+
+def _parse_clock(value: str | None) -> time | None:
+    if not value:
+        return None
+    hour, minute = value.split(":", 1)
+    return time(int(hour), int(minute))
