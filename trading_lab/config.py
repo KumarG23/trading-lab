@@ -33,8 +33,8 @@ class LabConfig:
         return cls(
             mode=env.get("TRADING_LAB_MODE", "paper"),
             account_equity=float(env.get("TRADING_LAB_ACCOUNT_EQUITY", "200")),
-            local_model_base_url=env.get("TRADING_LAB_LOCAL_BASE_URL", "http://100.66.106.122:8096/v1"),
-            local_model=env.get("TRADING_LAB_LOCAL_MODEL", "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF"),
+            local_model_base_url=env.get("TRADING_LAB_LOCAL_BASE_URL", "http://100.117.167.61:8098/v1"),
+            local_model=env.get("TRADING_LAB_LOCAL_MODEL", "ggml-org/gpt-oss-120b-GGUF"),
             escalation_provider=env.get("TRADING_LAB_ESCALATION_PROVIDER", "codex"),
             alpaca_api_key=env.get("ALPACA_API_KEY"),
             alpaca_secret_key=env.get("ALPACA_SECRET_KEY"),

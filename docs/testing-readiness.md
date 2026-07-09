@@ -33,7 +33,7 @@ Latest verification:
 
 ```text
 19 passed
-local model endpoint: http://100.66.106.122:8096/v1 reachable
+local model endpoint: http://100.117.167.61:8098/v1 reachable
 training examples exported: 3670
 training labels: hold_filter=3604, candidate_setup=61, avoid_or_repair=5
 ```
