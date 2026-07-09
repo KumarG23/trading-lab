@@ -99,7 +99,7 @@ def main() -> int:
         "start": start,
         "end": end,
     }
-    if args.quiet_no_events and not proposal_ids and not lifecycle["events"]:
+    if args.quiet_no_events and not proposal_ids and not lifecycle["events"] and not candidates:
         return 0
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0
