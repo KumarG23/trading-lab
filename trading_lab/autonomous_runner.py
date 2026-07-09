@@ -37,6 +37,7 @@ class AutonomousRunner:
         dedupe_minutes: int = 390,
         create_paper_positions: bool = True,
         max_reviews_per_run: int | None = None,
+        max_active_positions: int | None = 2,
     ) -> None:
         self.store = store
         self.worker = worker or DeterministicWorker()
@@ -44,10 +45,14 @@ class AutonomousRunner:
         self.dedupe_minutes = dedupe_minutes
         self.create_paper_positions = create_paper_positions
         self.max_reviews_per_run = max_reviews_per_run
+        self.max_active_positions = max_active_positions
 
     def process_candidates(self, candidates: list[dict[str, Any]]) -> list[int]:
         proposal_ids: list[int] = []
         review_attempts = 0
+        active_slots = None
+        if self.create_paper_positions and self.max_active_positions is not None:
+            active_slots = max(0, self.max_active_positions - len(self.store.list_active_paper_positions()))
         for candidate in candidates:
             decision = self.gate.validate(candidate)
             if not decision.ok:
@@ -62,6 +67,8 @@ class AutonomousRunner:
                 within_minutes=self.dedupe_minutes,
             ):
                 continue
+            if active_slots is not None and active_slots <= 0:
+                break
             if self.max_reviews_per_run is not None and review_attempts >= self.max_reviews_per_run:
                 break
             review_attempts += 1
@@ -107,6 +114,8 @@ class AutonomousRunner:
                     risk_dollars=float(candidate["risk_dollars"]),
                     status="pending_entry",
                 )
+                if active_slots is not None:
+                    active_slots -= 1
             proposal_ids.append(proposal_id)
         return proposal_ids
 

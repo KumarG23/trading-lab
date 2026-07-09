@@ -60,9 +60,12 @@ Promotion requires logged evidence and Neal's explicit approval. Prompt confiden
 ## Data handling
 
 - Private trade/account logs should stay local where possible.
-- Use local Qwen/Qwen3.6 for private reviews.
+- Use local Qwen/Qwen3.6 or the current local reviewer for private reviews.
 - Use Codex for code and deterministic calculations.
 - Avoid uploading raw private logs to paid/cloud models unless explicitly approved.
+- The SQLite journal is canonical. `training/proposal_outcomes.jsonl` is a regenerated derived dataset for future evals/tuning.
+- Capture compact proposal/outcome examples, not giant prompt transcripts: strategy, structured proposal, rule checklist, model thesis/objection, lifecycle outcome, R/PnL, adherence, and mistake category.
+- Fine-tuning comes after enough clean labeled outcomes plus held-out evals. Thousands of trades can support LoRA/SFT, but only if labels are high-quality and representative; raw volume of mediocre setups is just overfit goblin feed.
 
 ## Future Robinhood MCP phase
 

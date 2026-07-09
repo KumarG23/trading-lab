@@ -32,10 +32,12 @@ python3 -m pytest tests -q
 Latest verification:
 
 ```text
-19 passed
+51 passed
 local model endpoint: http://100.117.167.61:8098/v1 reachable
-training examples exported: 3670
-training labels: hold_filter=3604, candidate_setup=61, avoid_or_repair=5
+legacy sanitized training examples exported: 3670
+legacy training labels: hold_filter=3604, candidate_setup=61, avoid_or_repair=5
+proposal/outcome training dataset: training/proposal_outcomes.jsonl regenerated from journal/trading-lab.db
+current proposal/outcome examples: 33
 ```
 
 ## What the local model did in smoke testing
