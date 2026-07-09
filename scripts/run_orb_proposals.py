@@ -30,7 +30,7 @@ def main() -> int:
     parser.add_argument("--symbols", default=",".join(DEFAULT_WATCHLIST), help="Comma-separated fallback symbols")
     parser.add_argument("--watchlist-file", type=Path, default=ROOT / "data" / "processed" / "scanner-watchlist.json", help="Dynamic scanner watchlist JSON; falls back to --symbols if missing")
     parser.add_argument("--db", type=Path, default=ROOT / "journal" / "trading-lab.db")
-    parser.add_argument("--risk-dollars", type=float, default=None, help="Risk per proposal. Defaults to 1% of configured paper equity.")
+    parser.add_argument("--risk-dollars", type=float, default=None, help="Risk per proposal. Defaults to 1%% of configured paper equity.")
     parser.add_argument("--opening-range-minutes", type=int, default=5)
     parser.add_argument("--strategies", default="orb,vwap", help="Comma-separated strategy aliases: orb,vwap")
     parser.add_argument("--no-local-ai", action="store_true")
