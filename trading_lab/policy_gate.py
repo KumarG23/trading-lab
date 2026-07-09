@@ -18,6 +18,7 @@ class PolicyViolation(str, Enum):
     POSITION_TOO_LARGE = "position_too_large"
     STOP_TOO_TIGHT = "stop_too_tight"
     DAILY_TRADE_LIMIT = "daily_trade_limit"
+    DAILY_LOSS_LIMIT = "daily_loss_limit"
     WEEKLY_LOSS_LIMIT = "weekly_loss_limit"
 
 
@@ -88,7 +89,7 @@ class PolicyGate:
         if trades_today >= self.max_trades_per_day:
             violations.append(PolicyViolation.DAILY_TRADE_LIMIT)
         if abs(daily_realized_loss) >= self.account_equity * self.max_daily_loss_pct:
-            violations.append(PolicyViolation.WEEKLY_LOSS_LIMIT)
+            violations.append(PolicyViolation.DAILY_LOSS_LIMIT)
         if abs(weekly_realized_loss) >= self.account_equity * self.max_weekly_loss_pct:
             violations.append(PolicyViolation.WEEKLY_LOSS_LIMIT)
 

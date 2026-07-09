@@ -41,28 +41,26 @@ class LocalAIWorker:
         self.timeout = timeout
 
     def review(self, proposal: dict[str, Any]) -> dict[str, Any]:
+        compact_mode = "gpt-oss" in self.model.lower()
         training_examples = []
         if self.training_memory is not None:
             training_examples = self.training_memory.relevant_examples(
                 symbol=str(proposal.get("ticker") or proposal.get("symbol") or ""),
                 strategy_id=str(proposal.get("strategy_id") or ""),
-                limit=5,
+                limit=0 if compact_mode else 3,
             )
+        review_proposal = _compact_proposal(proposal) if compact_mode else proposal
         payload = {
             "model": self.model,
-            "temperature": 0.2,
+            "temperature": 0.0 if compact_mode else 0.2,
             "messages": [
                 {
                     "role": "system",
-                    "content": (
-                        "You are the local private analyst for a paper-trading lab. "
-                        "Return ONLY JSON with approved:boolean, thesis:string, "
-                        "risk_officer_objection:string. Do not place trades."
-                    ),
+                    "content": _system_prompt(compact=compact_mode),
                 },
                 {
                     "role": "user",
-                    "content": json.dumps({"proposal": proposal, "training_examples": training_examples}, sort_keys=True),
+                    "content": json.dumps({"proposal": review_proposal, "training_examples": training_examples}, sort_keys=True),
                 },
             ],
         }
@@ -94,3 +92,34 @@ def _extract_json_text(text: str) -> str:
     if start >= 0 and end > start:
         return text[start : end + 1]
     raise ValueError("invalid_json")
+
+
+def _system_prompt(*, compact: bool) -> str:
+    if compact:
+        return (
+            "You are a strict paper-trading proposal reviewer. Return ONLY minified JSON with "
+            "approved:boolean, thesis:string, risk_officer_objection:string. No prose. No markdown. "
+            "Approve only if the deterministic rule checklist and risk fields are internally consistent. "
+            "Keep thesis and objection under 100 characters each. Do not place trades."
+        )
+    return (
+        "You are the local private analyst for a paper-trading lab. "
+        "Return ONLY JSON with approved:boolean, thesis:string, "
+        "risk_officer_objection:string. Do not place trades."
+    )
+
+
+def _compact_proposal(proposal: dict[str, Any]) -> dict[str, Any]:
+    keys = [
+        "ticker",
+        "asset_class",
+        "direction",
+        "strategy_id",
+        "trigger",
+        "planned_entry",
+        "stop",
+        "target",
+        "risk_dollars",
+        "rule_checklist",
+    ]
+    return {key: proposal.get(key) for key in keys if key in proposal}

@@ -36,15 +36,18 @@ class AutonomousRunner:
         max_risk_pct: float = 0.01,
         dedupe_minutes: int = 390,
         create_paper_positions: bool = True,
+        max_reviews_per_run: int | None = None,
     ) -> None:
         self.store = store
         self.worker = worker or DeterministicWorker()
         self.gate = PolicyGate(account_equity=account_equity, max_risk_pct=max_risk_pct)
         self.dedupe_minutes = dedupe_minutes
         self.create_paper_positions = create_paper_positions
+        self.max_reviews_per_run = max_reviews_per_run
 
     def process_candidates(self, candidates: list[dict[str, Any]]) -> list[int]:
         proposal_ids: list[int] = []
+        review_attempts = 0
         for candidate in candidates:
             decision = self.gate.validate(candidate)
             if not decision.ok:
@@ -59,6 +62,9 @@ class AutonomousRunner:
                 within_minutes=self.dedupe_minutes,
             ):
                 continue
+            if self.max_reviews_per_run is not None and review_attempts >= self.max_reviews_per_run:
+                break
+            review_attempts += 1
             review = self.worker.review(candidate)
             if not review.get("approved", False):
                 continue

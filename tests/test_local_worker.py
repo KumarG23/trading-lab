@@ -54,6 +54,18 @@ def test_local_ai_worker_includes_training_examples_when_available():
     assert "hold_filter" in user_content
 
 
+def test_local_ai_worker_uses_compact_payload_for_gpt_oss():
+    client = FakeHTTPClient()
+    worker = LocalAIWorker(base_url="http://local:8098/v1", model="ggml-org/gpt-oss-120b-GGUF", http_client=client)
+
+    worker.review({"ticker": "AAPL", "strategy_id": "opening-range-breakout", "planned_entry": 101, "stop": 100, "target": 103, "verbose": "x" * 1000})
+
+    payload = client.payloads[0][1]
+    assert payload["temperature"] == 0.0
+    assert "No prose" in payload["messages"][0]["content"]
+    assert "verbose" not in payload["messages"][1]["content"]
+
+
 def test_local_ai_worker_fails_closed_on_bad_json():
     class BadClient:
         def post_json(self, url, payload, timeout):

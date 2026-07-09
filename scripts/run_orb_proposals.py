@@ -34,6 +34,7 @@ def main() -> int:
     parser.add_argument("--opening-range-minutes", type=int, default=5)
     parser.add_argument("--strategies", default="orb,vwap", help="Comma-separated strategy aliases: orb,vwap")
     parser.add_argument("--no-local-ai", action="store_true")
+    parser.add_argument("--max-reviews-per-run", type=int, default=3, help="Cap model-reviewed candidates per tick to prevent slow local model overlap")
     parser.add_argument("--ignore-market-hours", action="store_true")
     parser.add_argument("--quiet-no-events", action="store_true", help="Print nothing when no proposals/lifecycle events occur")
     args = parser.parse_args()
@@ -83,7 +84,12 @@ def main() -> int:
         training_memory=training_memory,
         timeout=120,
     )
-    proposal_ids = AutonomousRunner(store=store, worker=worker, account_equity=cfg.account_equity).process_candidates(candidates)
+    proposal_ids = AutonomousRunner(
+        store=store,
+        worker=worker,
+        account_equity=cfg.account_equity,
+        max_reviews_per_run=args.max_reviews_per_run,
+    ).process_candidates(candidates)
     payload = {
         "ok": True,
         "mode": "paper_proposal_only_no_orders",
@@ -94,6 +100,7 @@ def main() -> int:
         "symbols": symbols,
         "bars": len(bars),
         "candidates": len(candidates),
+        "max_reviews_per_run": args.max_reviews_per_run,
         "logged_proposal_ids": proposal_ids,
         "lifecycle": lifecycle,
         "start": start,

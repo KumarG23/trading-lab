@@ -85,3 +85,23 @@ def test_policy_gate_rejects_tiny_stop_that_creates_absurd_notional():
     assert PolicyViolation.STOP_TOO_TIGHT.value in result.violations
     assert PolicyViolation.POSITION_TOO_LARGE.value in result.violations
     assert result.position_notional > 2000
+
+
+def test_policy_gate_labels_daily_and_weekly_loss_limits_separately():
+    gate = PolicyGate(account_equity=1000, max_daily_loss_pct=0.05, max_weekly_loss_pct=0.12)
+    proposal = {
+        "ticker": "AAPL",
+        "asset_class": "stock",
+        "direction": "long",
+        "planned_entry": 101.0,
+        "stop": 100.0,
+        "target": 103.0,
+        "risk_dollars": 10.0,
+    }
+
+    daily = gate.validate(proposal, daily_realized_loss=-50)
+    weekly = gate.validate(proposal, weekly_realized_loss=-120)
+
+    assert PolicyViolation.DAILY_LOSS_LIMIT.value in daily.violations
+    assert PolicyViolation.WEEKLY_LOSS_LIMIT.value not in daily.violations
+    assert PolicyViolation.WEEKLY_LOSS_LIMIT.value in weekly.violations

@@ -11,6 +11,8 @@ class TrainingMemory:
         self.examples = self._load()
 
     def relevant_examples(self, *, symbol: str, strategy_id: str, limit: int = 5) -> list[dict[str, Any]]:
+        if limit <= 0:
+            return []
         symbol = symbol.upper()
         strategy_id = strategy_id.lower()
         scored: list[tuple[int, dict[str, Any]]] = []
@@ -40,4 +42,7 @@ class TrainingMemory:
 
 def _compact(example: dict[str, Any]) -> dict[str, Any]:
     keys = ["symbol", "asset_class", "action", "confidence", "strategy_used", "lesson_label", "outcome", "pnl_pct", "reasoning_summary"]
-    return {k: example.get(k) for k in keys if k in example}
+    compacted = {k: example.get(k) for k in keys if k in example}
+    if compacted.get("reasoning_summary"):
+        compacted["reasoning_summary"] = str(compacted["reasoning_summary"])[:320]
+    return compacted

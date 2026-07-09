@@ -23,9 +23,32 @@ def main() -> int:
 
     con = sqlite3.connect(DB)
     con.row_factory = sqlite3.Row
-    proposals = [dict(r) for r in con.execute("SELECT * FROM proposals WHERE created_at >= ? ORDER BY id", (session_start,))]
-    positions = [dict(r) for r in con.execute("SELECT * FROM paper_positions ORDER BY id")]
-    trades = [dict(r) for r in con.execute("SELECT * FROM paper_trades WHERE created_at >= ? ORDER BY id", (session_start,))]
+    proposals = [dict(r) for r in con.execute("SELECT * FROM proposals WHERE created_at >= ? AND status NOT LIKE '%quarantined%' ORDER BY id", (session_start,))]
+    positions = [
+        dict(r)
+        for r in con.execute(
+            """
+            SELECT pp.* FROM paper_positions pp
+            JOIN proposals p ON p.id = pp.proposal_id
+            WHERE p.status NOT LIKE '%quarantined%'
+            ORDER BY pp.id
+            """
+        )
+    ]
+    trades = [
+        dict(r)
+        for r in con.execute(
+            """
+            SELECT pt.* FROM paper_trades pt
+            JOIN proposals p ON p.id = pt.proposal_id
+            WHERE pt.created_at >= ?
+              AND p.status NOT LIKE '%quarantined%'
+              AND COALESCE(pt.mistake_category, '') NOT LIKE '%quarantined%'
+            ORDER BY pt.id
+            """,
+            (session_start,),
+        )
+    ]
     active = [p for p in positions if p["status"] in {"pending_entry", "open"}]
     by_strategy = Counter(p["strategy_id"] for p in proposals)
     by_status = Counter(p["status"] for p in positions)

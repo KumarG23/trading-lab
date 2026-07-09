@@ -253,16 +253,37 @@ class JournalStore:
             )
             return int(cur.lastrowid)
 
-    def list_active_paper_positions(self) -> list[dict[str, Any]]:
+    def list_active_paper_positions(self, *, include_quarantined: bool = False) -> list[dict[str, Any]]:
         with self._conn() as conn:
-            rows = conn.execute(
-                "SELECT * FROM paper_positions WHERE status IN ('pending_entry', 'open') ORDER BY id"
-            ).fetchall()
+            if include_quarantined:
+                rows = conn.execute(
+                    "SELECT pp.* FROM paper_positions pp WHERE pp.status IN ('pending_entry', 'open') ORDER BY pp.id"
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT pp.* FROM paper_positions pp
+                    JOIN proposals p ON p.id = pp.proposal_id
+                    WHERE pp.status IN ('pending_entry', 'open')
+                      AND p.status NOT LIKE '%quarantined%'
+                    ORDER BY pp.id
+                    """
+                ).fetchall()
         return [_decode(row) for row in rows]
 
-    def list_paper_positions(self) -> list[dict[str, Any]]:
+    def list_paper_positions(self, *, include_quarantined: bool = False) -> list[dict[str, Any]]:
         with self._conn() as conn:
-            rows = conn.execute("SELECT * FROM paper_positions ORDER BY id").fetchall()
+            if include_quarantined:
+                rows = conn.execute("SELECT * FROM paper_positions ORDER BY id").fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT pp.* FROM paper_positions pp
+                    JOIN proposals p ON p.id = pp.proposal_id
+                    WHERE p.status NOT LIKE '%quarantined%'
+                    ORDER BY pp.id
+                    """
+                ).fetchall()
         return [_decode(row) for row in rows]
 
     def mark_position_open(self, position_id: int, *, entered_at: str, entry_price: float | None = None) -> None:
@@ -332,14 +353,28 @@ class JournalStore:
                 (closed_at, reason, position_id),
             )
 
-    def list_proposals(self) -> list[dict[str, Any]]:
+    def list_proposals(self, *, include_quarantined: bool = False) -> list[dict[str, Any]]:
         with self._conn() as conn:
-            rows = conn.execute("SELECT * FROM proposals ORDER BY id").fetchall()
+            if include_quarantined:
+                rows = conn.execute("SELECT * FROM proposals ORDER BY id").fetchall()
+            else:
+                rows = conn.execute("SELECT * FROM proposals WHERE status NOT LIKE '%quarantined%' ORDER BY id").fetchall()
         return [_decode(row) for row in rows]
 
-    def list_paper_trades(self) -> list[dict[str, Any]]:
+    def list_paper_trades(self, *, include_quarantined: bool = False) -> list[dict[str, Any]]:
         with self._conn() as conn:
-            rows = conn.execute("SELECT * FROM paper_trades ORDER BY id").fetchall()
+            if include_quarantined:
+                rows = conn.execute("SELECT * FROM paper_trades ORDER BY id").fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT pt.* FROM paper_trades pt
+                    JOIN proposals p ON p.id = pt.proposal_id
+                    WHERE p.status NOT LIKE '%quarantined%'
+                      AND COALESCE(pt.mistake_category, '') NOT LIKE '%quarantined%'
+                    ORDER BY pt.id
+                    """
+                ).fetchall()
         return [_decode(row) for row in rows]
 
 

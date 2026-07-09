@@ -3,7 +3,11 @@ from trading_lab.journal_store import JournalStore
 
 
 class FakeWorker:
+    def __init__(self):
+        self.reviewed = []
+
     def review(self, proposal):
+        self.reviewed.append(proposal["ticker"])
         return {
             "approved": True,
             "thesis": "local model agrees with deterministic setup",
@@ -69,3 +73,15 @@ def test_autonomous_runner_suppresses_duplicate_proposals(tmp_path):
     assert second == []
     assert len(store.list_proposals()) == 1
     assert len(store.list_paper_positions()) == 1
+
+
+def test_autonomous_runner_caps_model_reviews_per_run(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    worker = FakeWorker()
+    runner = AutonomousRunner(store=store, worker=worker, account_equity=1000, max_reviews_per_run=1)
+
+    ids = runner.process_candidates([_good_candidate("AAPL"), _good_candidate("MSFT")])
+
+    assert len(ids) == 1
+    assert worker.reviewed == ["AAPL"]
+    assert [p["ticker"] for p in store.list_proposals()] == ["AAPL"]
