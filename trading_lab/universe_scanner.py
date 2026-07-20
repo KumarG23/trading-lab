@@ -79,6 +79,26 @@ def score_universe(
     return sorted(rows, key=lambda row: (-float(row["score"]), row["symbol"]))
 
 
+def filter_stocks_in_play(
+    scored: list[dict[str, Any]],
+    *,
+    min_score: float = 35.0,
+    min_abs_change_pct: float = 2.0,
+    min_relative_volume: float = 1.2,
+    min_intraday_range_pct: float = 2.5,
+) -> list[dict[str, Any]]:
+    return [
+        row
+        for row in scored
+        if float(row.get("score") or 0) >= min_score
+        and (
+            abs(float(row.get("change_pct") or 0)) >= min_abs_change_pct
+            or float(row.get("relative_volume") or 0) >= min_relative_volume
+            or float(row.get("intraday_range_pct") or 0) >= min_intraday_range_pct
+        )
+    ]
+
+
 def pick_watchlist(scored: list[dict[str, Any]], *, core_symbols: list[str] | None = None, max_symbols: int = 30) -> list[str]:
     selected: list[str] = []
     for symbol in core_symbols or CORE_SYMBOLS:

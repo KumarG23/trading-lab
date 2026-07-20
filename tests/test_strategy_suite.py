@@ -86,6 +86,28 @@ def test_generate_strategy_candidates_can_run_vwap_only():
     assert [candidate["strategy_id"] for candidate in candidates] == ["vwap-trend-imbalance"]
 
 
+def test_generate_strategy_candidates_can_require_bullish_spy_regime():
+    qqq = [
+        _bar("QQQ", 0, 100.2, 99.8, 100.0, 1000),
+        _bar("QQQ", 1, 100.4, 100.0, 100.2, 1000),
+        _bar("QQQ", 2, 100.7, 100.2, 100.5, 1000),
+        _bar("QQQ", 3, 101.0, 100.5, 100.8, 1000),
+        _bar("QQQ", 4, 101.3, 100.8, 101.1, 1000),
+        _bar("QQQ", 5, 102.4, 101.6, 102.2, 2300),
+    ]
+    spy = [_bar("SPY", minute, 101.1 - minute * 0.2, 100.9 - minute * 0.2, 101 - minute * 0.2, 1000) for minute in range(6)]
+
+    candidates = generate_strategy_candidates(
+        qqq + spy,
+        symbols=["QQQ", "SPY"],
+        enabled_strategies=["vwap"],
+        risk_dollars=2.0,
+        require_bullish_market_regime=True,
+    )
+
+    assert candidates == []
+
+
 def test_generate_strategy_candidates_includes_reclaim_and_momentum_aliases():
     reclaim_bars = [
         _bar("AAPL", 0, 100.2, 99.8, 100.0, 1000),

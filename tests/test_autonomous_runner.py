@@ -125,7 +125,7 @@ def test_autonomous_runner_prioritizes_underrepresented_strategy(tmp_path):
     assert store.list_proposals()[-1]["strategy_id"] == "vwap-reclaim"
 
 
-def test_autonomous_runner_enforces_daily_trade_limit_before_review(tmp_path):
+def test_autonomous_runner_research_default_allows_more_than_five_trades(tmp_path):
     store = JournalStore(tmp_path / "lab.db")
     for index in range(5):
         proposal_id = store.log_proposal(
@@ -153,8 +153,8 @@ def test_autonomous_runner_enforces_daily_trade_limit_before_review(tmp_path):
 
     ids = runner.process_candidates([_good_candidate("MSFT")])
 
-    assert ids == []
-    assert worker.reviewed == []
+    assert len(ids) == 1
+    assert worker.reviewed == ["MSFT"]
 
 
 def test_autonomous_runner_uses_net_realized_pnl_for_loss_circuit_breaker(tmp_path):

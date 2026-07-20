@@ -42,7 +42,7 @@ class PolicyGate:
         max_risk_pct: float = 0.01,
         max_daily_loss_pct: float = 0.05,
         max_weekly_loss_pct: float = 0.12,
-        max_trades_per_day: int = 5,
+        max_trades_per_day: int = 20,
         min_reward_risk: float = 1.5,
         max_position_notional_pct: float = 2.0,
         min_stop_distance_pct: float = 0.001,

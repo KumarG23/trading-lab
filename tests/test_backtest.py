@@ -116,3 +116,28 @@ def test_backtest_does_not_use_signal_bars_earlier_low_after_close_entry():
 
     assert result["trades"] == 1
     assert result["metrics"]["total_r"] == 2.0
+
+
+def test_backtest_can_apply_bullish_market_regime_filter():
+    aapl = [
+        _bar("AAPL", 0, 101.0, 99.0, 100.0, 1000),
+        _bar("AAPL", 1, 101.2, 99.2, 100.2, 1000),
+        _bar("AAPL", 2, 101.3, 99.3, 100.3, 1000),
+        _bar("AAPL", 3, 101.4, 99.4, 100.4, 1000),
+        _bar("AAPL", 4, 101.5, 99.5, 100.5, 1000),
+        _bar("AAPL", 5, 102.2, 101.6, 102.0, 2500),
+        _bar("AAPL", 6, 103.2, 101.9, 103.1, 2000),
+    ]
+    spy = [_bar("SPY", minute, 101.1 - minute * 0.2, 100.9 - minute * 0.2, 101 - minute * 0.2, 1000) for minute in range(7)]
+
+    result = run_strategy_backtest(
+        aapl + spy,
+        symbols=["AAPL", "SPY"],
+        enabled_strategies=["orb"],
+        account_equity=200.0,
+        risk_dollars=2.0,
+        require_bullish_market_regime=True,
+    )
+
+    assert result["proposals"] == 0
+    assert result["trades"] == 0

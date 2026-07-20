@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT))
 
 from trading_lab.alpaca_client import AlpacaClient  # noqa: E402
 from trading_lab.config import LabConfig  # noqa: E402
-from trading_lab.universe_scanner import CORE_SYMBOLS, DEFAULT_SCAN_UNIVERSE, pick_watchlist, score_universe  # noqa: E402
+from trading_lab.universe_scanner import CORE_SYMBOLS, DEFAULT_SCAN_UNIVERSE, filter_stocks_in_play, pick_watchlist, score_universe  # noqa: E402
 
 ET = ZoneInfo("America/New_York")
 DEFAULT_OUTPUT = ROOT / "data" / "processed" / "scanner-watchlist.json"
@@ -46,6 +46,7 @@ def main() -> int:
         timeframe="1Min",
         start=start_dt.isoformat(timespec="seconds").replace("+00:00", "Z"),
         end=end_dt.isoformat(timespec="seconds").replace("+00:00", "Z"),
+        batch_size=1,
     )
     scored = score_universe(
         bars,
@@ -54,7 +55,8 @@ def main() -> int:
         max_price=args.max_price,
         min_dollar_volume=args.min_dollar_volume,
     )
-    watchlist = pick_watchlist(scored, core_symbols=CORE_SYMBOLS, max_symbols=args.max_symbols)
+    stocks_in_play = filter_stocks_in_play(scored)
+    watchlist = pick_watchlist(stocks_in_play, core_symbols=CORE_SYMBOLS, max_symbols=args.max_symbols)
     payload = {
         "ok": True,
         "mode": "dynamic_universe_scan_no_orders",
@@ -63,6 +65,7 @@ def main() -> int:
         "scan_universe_count": len(symbols),
         "bars": len(bars),
         "watchlist": watchlist,
+        "stocks_in_play_count": len(stocks_in_play),
         "top_matches": scored[:30],
         "filters": {
             "min_price": args.min_price,

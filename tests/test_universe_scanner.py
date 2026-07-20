@@ -1,4 +1,4 @@
-from trading_lab.universe_scanner import DEFAULT_SCAN_UNIVERSE, pick_watchlist, score_universe
+from trading_lab.universe_scanner import DEFAULT_SCAN_UNIVERSE, filter_stocks_in_play, pick_watchlist, score_universe
 
 
 def _bar(symbol, day, minute, close, volume=1000):
@@ -41,6 +41,20 @@ def test_pick_watchlist_keeps_core_symbols_and_top_scanner_matches():
     watchlist = pick_watchlist(scored, core_symbols=["SPY", "QQQ"], max_symbols=4)
 
     assert watchlist == ["SPY", "QQQ", "SOFI", "PLTR"]
+
+
+def test_filter_stocks_in_play_rejects_liquid_but_inert_names():
+    scored = [
+        {"symbol": "MOVE", "score": 52, "change_pct": 3.1, "relative_volume": 1.0, "intraday_range_pct": 2.0},
+        {"symbol": "RVOL", "score": 48, "change_pct": 0.5, "relative_volume": 1.5, "intraday_range_pct": 1.0},
+        {"symbol": "RANGE", "score": 43, "change_pct": 0.2, "relative_volume": 0.9, "intraday_range_pct": 3.0},
+        {"symbol": "SLEEP", "score": 42, "change_pct": 0.2, "relative_volume": 0.9, "intraday_range_pct": 1.0},
+        {"symbol": "WEAK", "score": 20, "change_pct": 5.0, "relative_volume": 2.0, "intraday_range_pct": 5.0},
+    ]
+
+    filtered = filter_stocks_in_play(scored)
+
+    assert [row["symbol"] for row in filtered] == ["MOVE", "RVOL", "RANGE"]
 
 
 def test_default_scan_universe_contains_more_than_large_cap_megafaang():

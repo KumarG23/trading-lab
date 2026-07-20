@@ -42,7 +42,7 @@ class AutonomousRunner:
         create_paper_positions: bool = True,
         max_reviews_per_run: int | None = None,
         max_active_positions: int | None = 2,
-        max_trades_per_day: int = 5,
+        max_trades_per_day: int = 20,
     ) -> None:
         self.store = store
         self.worker = worker or DeterministicWorker()

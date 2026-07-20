@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from trading_lab.market_regime import bullish_market_regime
 from trading_lab.momentum_pullback import generate_momentum_pullback_candidates
 from trading_lab.opening_range_breakout import generate_orb_candidates
 from trading_lab.vwap_reclaim import generate_vwap_reclaim_candidates
@@ -18,6 +19,7 @@ def generate_strategy_candidates(
     account_equity: float | None = None,
     max_position_notional_pct: float = 2.0,
     live_latest_only: bool = False,
+    require_bullish_market_regime: bool = False,
 ) -> list[dict[str, Any]]:
     enabled = {strategy.strip().lower() for strategy in enabled_strategies}
     candidates: list[dict[str, Any]] = []
@@ -58,6 +60,9 @@ def generate_strategy_candidates(
                 risk_dollars=risk_dollars,
             )
         )
+
+    if require_bullish_market_regime and not bullish_market_regime(bars):
+        candidates = [candidate for candidate in candidates if str(candidate.get("direction") or "").lower() != "long"]
 
     return _cap_risk_for_notional(
         candidates,

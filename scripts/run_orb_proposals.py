@@ -37,6 +37,7 @@ def main() -> int:
     parser.add_argument("--risk-dollars", type=float, default=None, help="Risk per proposal. Defaults to 1%% of configured paper equity.")
     parser.add_argument("--opening-range-minutes", type=int, default=5)
     parser.add_argument("--strategies", default="orb,vwap,reclaim,momentum", help="Comma-separated strategy aliases: orb,vwap,reclaim,momentum")
+    parser.add_argument("--bullish-regime-filter", action="store_true", help="Require SPY above rising intraday VWAP for long candidates")
     parser.add_argument("--no-local-ai", action="store_true")
     parser.add_argument("--max-reviews-per-run", type=int, default=3, help="Cap model-reviewed candidates per tick to prevent slow local model overlap")
     parser.add_argument("--max-active-positions", type=int, default=2, help="Cap concurrent open/pending simulated positions")
@@ -89,6 +90,7 @@ def main() -> int:
         opening_range_minutes=args.opening_range_minutes,
         account_equity=cfg.account_equity,
         live_latest_only=True,
+        require_bullish_market_regime=args.bullish_regime_filter,
     )
     strategy_finished = perf_counter()
 
@@ -126,6 +128,7 @@ def main() -> int:
         "paper_equity": cfg.account_equity,
         "risk_dollars": risk_dollars,
         "strategies": strategies,
+        "bullish_regime_filter": args.bullish_regime_filter,
         "symbols": symbols,
         "bars": len(bars),
         "candidates": len(candidates),

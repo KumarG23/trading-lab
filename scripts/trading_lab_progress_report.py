@@ -1,20 +1,30 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import json
 import sqlite3
 from collections import Counter
 from datetime import datetime, time
 from pathlib import Path
+import sys
 from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from trading_lab.daily_summary import format_daily_summary, max_drawdown_r  # noqa: E402
+
 DB = ROOT / "journal" / "trading-lab.db"
 SCANNER = ROOT / "data" / "processed" / "scanner-watchlist.json"
+RUNTIME = ROOT / "data" / "processed" / "last-paper-watch.json"
 ET = ZoneInfo("America/New_York")
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Report Agentic Trading Lab progress.")
+    parser.add_argument("--succinct", action="store_true", help="Emit the compact market-close briefing")
+    args = parser.parse_args()
     now = datetime.now(ET)
     session_start = datetime.combine(now.date(), time(0, 0), ET).isoformat(timespec="seconds")
     if not DB.exists():
@@ -57,6 +67,51 @@ def main() -> int:
     total_r = sum(float(p["r_multiple"] or 0) for p in closed_today)
     total_pnl = sum(float(p["pnl"] or 0) for p in closed_today)
 
+    if args.succinct:
+        runtime = _load_json(RUNTIME)
+        timings = runtime.get("timings_ms") or {}
+        strategy_stats: dict[str, dict[str, float]] = {}
+        for position in closed_today:
+            strategy = str(position.get("strategy_id") or "unknown")
+            row = strategy_stats.setdefault(strategy, {"count": 0.0, "r": 0.0})
+            row["count"] += 1
+            row["r"] += float(position.get("r_multiple") or 0)
+        labels = {
+            "opening-range-breakout": "ORB",
+            "vwap-trend-imbalance": "VWAP trend",
+            "vwap-reclaim": "VWAP reclaim",
+            "momentum-pullback": "Momentum",
+        }
+        strategy_lines = [
+            f"{labels.get(strategy, strategy)} {int(stats['count'])}: {stats['r']:+.2f}R"
+            for strategy, stats in sorted(strategy_stats.items())
+        ]
+        r_values = [float(position.get("r_multiple") or 0) for position in closed_today]
+        print(
+            format_daily_summary(
+                {
+                    "date": now.date().isoformat(),
+                    "last_scan_ok": bool(runtime.get("ok")),
+                    "scan_interval_minutes": 1,
+                    "loop_ms": timings.get("total", 0),
+                    "decision_ms": timings.get("decision", 0),
+                    "broker_orders": runtime.get("broker_orders", 0),
+                    "proposals": len(proposals),
+                    "closes": len(closed_today),
+                    "wins": sum(1 for value in r_values if value > 0),
+                    "losses": sum(1 for value in r_values if value < 0),
+                    "pnl": total_pnl,
+                    "r": total_r,
+                    "max_drawdown_r": max_drawdown_r(r_values),
+                    "strategy_lines": strategy_lines,
+                    "active_positions": len(active),
+                    "errors": 0 if runtime.get("ok") else 1,
+                    "blocker": "No strategy has passed walk-forward promotion gates.",
+                }
+            )
+        )
+        return 0
+
     lines = [
         f"Trading Lab progress — {now:%Y-%m-%d %I:%M %p %Z}",
         "Mode: paper proposal only; broker orders: 0; live trading: disabled",
@@ -94,6 +149,15 @@ def _load_scanner() -> dict:
         return {}
     try:
         return json.loads(SCANNER.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+
+
+def _load_json(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return {}
 
