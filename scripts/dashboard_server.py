@@ -74,6 +74,7 @@ def _snapshot() -> dict:
         account_equity=cfg.account_equity,
         live_enabled=cfg.live_trading_enabled,
         scanner_path=ROOT / "data" / "processed" / "scanner-watchlist.json",
+        telemetry_path=ROOT / "data" / "processed" / "last-paper-watch.json",
     )
 
 
@@ -85,6 +86,8 @@ def render_dashboard(snapshot: dict) -> str:
     scanner = snapshot.get("scanner") or {}
     scanner_cards = "".join(_scanner_html(row) for row in scanner.get("top_matches", [])[:8]) or '<div class="empty">Scanner has not run yet.</div>'
     scanner_watchlist = ", ".join(scanner.get("watchlist", [])[:30]) or "fallback watchlist"
+    runtime = snapshot.get("runtime") or {}
+    timings = runtime.get("timings_ms") or {}
     metrics = snapshot["metrics"]
     return f"""<!doctype html>
 <html lang="en">
@@ -143,7 +146,7 @@ footer {{ color:var(--muted); margin-top:18px; font-size:12px; font-family:ui-mo
   <div class="badge">LIVE TRADING DISABLED</div>
 </header>
 <section class="grid">
-  <div class="card hero"><div class="radar"></div><h2>Today's scanner watchlist</h2><p class="watchlist">{scanner_watchlist}</p><div class="pills"><div class="pill"><span>Universe scanned</span><strong>{scanner.get('scan_universe_count', 0)}</strong></div><div class="pill"><span>Top matches</span><strong>{len(scanner.get('top_matches', []))}</strong></div><div class="pill"><span>Generated</span><strong>{scanner.get('generated_at', 'not yet')}</strong></div></div></div>
+  <div class="card hero"><div class="radar"></div><h2>Today's scanner watchlist</h2><p class="watchlist">{scanner_watchlist}</p><div class="pills"><div class="pill"><span>Universe scanned</span><strong>{scanner.get('scan_universe_count', 0)}</strong></div><div class="pill"><span>Top matches</span><strong>{len(scanner.get('top_matches', []))}</strong></div><div class="pill"><span>Loop</span><strong>{timings.get('total', '?')} ms</strong></div><div class="pill"><span>Decision</span><strong>{timings.get('decision', '?')} ms</strong></div></div></div>
   <div class="card scanner"><h2>Radar pings</h2>{scanner_cards}</div>
   {_kpi('Proposals', snapshot['counts']['proposals'], 'all logged proposals')}
   {_kpi('Active', snapshot['counts']['active_positions'], 'simulated positions')}

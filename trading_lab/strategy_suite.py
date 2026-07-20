@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from trading_lab.momentum_pullback import generate_momentum_pullback_candidates
 from trading_lab.opening_range_breakout import generate_orb_candidates
+from trading_lab.vwap_reclaim import generate_vwap_reclaim_candidates
 from trading_lab.vwap_trend_imbalance import generate_vwap_trend_candidates
 
 
@@ -15,6 +17,7 @@ def generate_strategy_candidates(
     opening_range_minutes: int = 5,
     account_equity: float | None = None,
     max_position_notional_pct: float = 2.0,
+    live_latest_only: bool = False,
 ) -> list[dict[str, Any]]:
     enabled = {strategy.strip().lower() for strategy in enabled_strategies}
     candidates: list[dict[str, Any]] = []
@@ -25,6 +28,7 @@ def generate_strategy_candidates(
                 bars,
                 opening_range_minutes=opening_range_minutes,
                 risk_dollars=risk_dollars,
+                latest_only=live_latest_only,
             )
         )
     if "vwap" in enabled or "vwap-trend-imbalance" in enabled:
@@ -36,6 +40,22 @@ def generate_strategy_candidates(
                 min_bars=6,
                 slope_lookback=3,
                 volume_lookback=5,
+            )
+        )
+    if "reclaim" in enabled or "vwap-reclaim" in enabled:
+        candidates.extend(
+            generate_vwap_reclaim_candidates(
+                bars,
+                symbols=symbols,
+                risk_dollars=risk_dollars,
+            )
+        )
+    if "momentum" in enabled or "momentum-pullback" in enabled:
+        candidates.extend(
+            generate_momentum_pullback_candidates(
+                bars,
+                symbols=symbols,
+                risk_dollars=risk_dollars,
             )
         )
 

@@ -15,6 +15,7 @@ def generate_orb_candidates(
     risk_dollars: float = 10.0,
     volume_confirmation_multiple: float = 1.5,
     max_candidates_per_symbol: int = 1,
+    latest_only: bool = False,
 ) -> list[dict[str, Any]]:
     """Generate first valid ORB candidate per symbol from intraday 1-minute bars.
 
@@ -35,7 +36,8 @@ def generate_orb_candidates(
         avg_volume = mean(float(bar["volume"]) for bar in opening_range)
         if avg_volume <= 0:
             continue
-        for breakout_bar in ordered[opening_range_minutes:]:
+        breakout_bars = ordered[-1:] if latest_only else ordered[opening_range_minutes:]
+        for breakout_bar in breakout_bars:
             close = float(breakout_bar["close"])
             volume = float(breakout_bar["volume"])
             if volume < avg_volume * volume_confirmation_multiple:

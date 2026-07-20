@@ -97,3 +97,93 @@ def test_autonomous_runner_caps_active_paper_positions_before_review(tmp_path):
     assert len(ids) == 1
     assert worker.reviewed == ["AAPL"]
     assert len(store.list_active_paper_positions()) == 1
+
+
+def test_autonomous_runner_prioritizes_underrepresented_strategy(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    store.log_proposal(
+        ticker="AAPL",
+        strategy_id="opening-range-breakout",
+        direction="long",
+        trigger="historical orb",
+        planned_entry=101,
+        stop=100,
+        target=103,
+        thesis="history",
+        rule_checklist={},
+    )
+    worker = FakeWorker()
+    runner = AutonomousRunner(store=store, worker=worker, account_equity=1000, max_active_positions=1)
+    orb = _good_candidate("MSFT")
+    reclaim = _good_candidate("QQQ")
+    reclaim["strategy_id"] = "vwap-reclaim"
+
+    ids = runner.process_candidates([orb, reclaim])
+
+    assert len(ids) == 1
+    assert worker.reviewed == ["QQQ"]
+    assert store.list_proposals()[-1]["strategy_id"] == "vwap-reclaim"
+
+
+def test_autonomous_runner_enforces_daily_trade_limit_before_review(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    for index in range(5):
+        proposal_id = store.log_proposal(
+            ticker=f"T{index}",
+            strategy_id="opening-range-breakout",
+            direction="long",
+            trigger="historical",
+            planned_entry=101,
+            stop=100,
+            target=103,
+            thesis="history",
+            rule_checklist={},
+        )
+        store.log_paper_trade(
+            proposal_id=proposal_id,
+            actual_entry=101,
+            actual_exit=103,
+            position_size=1,
+            pnl=2,
+            actual_r_multiple=2,
+            rule_adherent=True,
+        )
+    worker = FakeWorker()
+    runner = AutonomousRunner(store=store, worker=worker, account_equity=1000, max_active_positions=None)
+
+    ids = runner.process_candidates([_good_candidate("MSFT")])
+
+    assert ids == []
+    assert worker.reviewed == []
+
+
+def test_autonomous_runner_uses_net_realized_pnl_for_loss_circuit_breaker(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    for index, pnl in enumerate((-60, 100)):
+        proposal_id = store.log_proposal(
+            ticker=f"P{index}",
+            strategy_id="opening-range-breakout",
+            direction="long",
+            trigger="historical",
+            planned_entry=101,
+            stop=100,
+            target=103,
+            thesis="history",
+            rule_checklist={},
+        )
+        store.log_paper_trade(
+            proposal_id=proposal_id,
+            actual_entry=101,
+            actual_exit=103,
+            position_size=1,
+            pnl=pnl,
+            actual_r_multiple=2,
+            rule_adherent=True,
+        )
+    worker = FakeWorker()
+    runner = AutonomousRunner(store=store, worker=worker, account_equity=1000, max_active_positions=None)
+
+    ids = runner.process_candidates([_good_candidate("MSFT")])
+
+    assert len(ids) == 1
+    assert worker.reviewed == ["MSFT"]

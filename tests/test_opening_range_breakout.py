@@ -33,3 +33,15 @@ def test_generate_orb_candidate_requires_breakout_volume_confirmation():
     ]
 
     assert generate_orb_candidates(bars, opening_range_minutes=5, risk_dollars=10) == []
+
+
+def test_generate_orb_latest_only_ignores_stale_earlier_breakout():
+    bars = [
+        {"symbol": "AAPL", "timestamp": f"2026-06-29T13:3{i}:00Z", "open": 100, "high": 101, "low": 99, "close": 100.5, "volume": 1000}
+        for i in range(5)
+    ] + [
+        {"symbol": "AAPL", "timestamp": "2026-06-29T13:35:00Z", "open": 100.5, "high": 102, "low": 100.4, "close": 101.8, "volume": 2500},
+        {"symbol": "AAPL", "timestamp": "2026-06-29T13:36:00Z", "open": 101.8, "high": 101.9, "low": 101.2, "close": 101.4, "volume": 900},
+    ]
+
+    assert generate_orb_candidates(bars, opening_range_minutes=5, risk_dollars=10, latest_only=True) == []

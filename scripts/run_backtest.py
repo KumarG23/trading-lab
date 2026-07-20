@@ -48,6 +48,7 @@ def main() -> int:
         timeframe="1Min",
         start=start_dt.isoformat(timespec="seconds").replace("+00:00", "Z"),
         end=end_dt.isoformat(timespec="seconds").replace("+00:00", "Z"),
+        batch_size=1,
     )
     result = run_strategy_backtest(
         bars,

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Any, Protocol
+from zoneinfo import ZoneInfo
 
 from trading_lab.journal_store import JournalStore
 from trading_lab.policy_gate import PolicyGate
+
+ET = ZoneInfo("America/New_York")
 
 
 class ProposalWorker(Protocol):
@@ -38,10 +42,15 @@ class AutonomousRunner:
         create_paper_positions: bool = True,
         max_reviews_per_run: int | None = None,
         max_active_positions: int | None = 2,
+        max_trades_per_day: int = 5,
     ) -> None:
         self.store = store
         self.worker = worker or DeterministicWorker()
-        self.gate = PolicyGate(account_equity=account_equity, max_risk_pct=max_risk_pct)
+        self.gate = PolicyGate(
+            account_equity=account_equity,
+            max_risk_pct=max_risk_pct,
+            max_trades_per_day=max_trades_per_day,
+        )
         self.dedupe_minutes = dedupe_minutes
         self.create_paper_positions = create_paper_positions
         self.max_reviews_per_run = max_reviews_per_run
@@ -50,11 +59,29 @@ class AutonomousRunner:
     def process_candidates(self, candidates: list[dict[str, Any]]) -> list[int]:
         proposal_ids: list[int] = []
         review_attempts = 0
+        strategy_counts: dict[str, int] = {}
+        for proposal in self.store.list_proposals():
+            strategy = str(proposal.get("strategy_id") or "unknown")
+            strategy_counts[strategy] = strategy_counts.get(strategy, 0) + 1
+        candidates = sorted(
+            candidates,
+            key=lambda candidate: (
+                strategy_counts.get(str(candidate.get("strategy_id") or "unknown"), 0),
+                str(candidate.get("strategy_id") or ""),
+                str(candidate.get("ticker") or ""),
+            ),
+        )
+        trades_today, daily_realized_loss, weekly_realized_loss = self._risk_state()
         active_slots = None
         if self.create_paper_positions and self.max_active_positions is not None:
             active_slots = max(0, self.max_active_positions - len(self.store.list_active_paper_positions()))
         for candidate in candidates:
-            decision = self.gate.validate(candidate)
+            decision = self.gate.validate(
+                candidate,
+                trades_today=trades_today,
+                daily_realized_loss=daily_realized_loss,
+                weekly_realized_loss=weekly_realized_loss,
+            )
             if not decision.ok:
                 continue
             if self.store.recent_duplicate_proposal(
@@ -118,6 +145,26 @@ class AutonomousRunner:
                     active_slots -= 1
             proposal_ids.append(proposal_id)
         return proposal_ids
+
+    def _risk_state(self) -> tuple[int, float, float]:
+        now = datetime.now(ET)
+        today = now.date()
+        week_start = today - timedelta(days=today.weekday())
+        trades_today = 0
+        daily_loss = 0.0
+        weekly_loss = 0.0
+        for trade in self.store.list_paper_trades():
+            try:
+                trade_date = datetime.fromisoformat(str(trade["created_at"])).astimezone(ET).date()
+            except (TypeError, ValueError):
+                continue
+            pnl = float(trade.get("pnl") or 0.0)
+            if trade_date == today:
+                trades_today += 1
+                daily_loss += pnl
+            if week_start <= trade_date <= today:
+                weekly_loss += pnl
+        return trades_today, min(0.0, daily_loss), min(0.0, weekly_loss)
 
 
 def _float_or_none(value: Any) -> float | None:

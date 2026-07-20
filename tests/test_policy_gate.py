@@ -105,3 +105,22 @@ def test_policy_gate_labels_daily_and_weekly_loss_limits_separately():
     assert PolicyViolation.DAILY_LOSS_LIMIT.value in daily.violations
     assert PolicyViolation.WEEKLY_LOSS_LIMIT.value not in daily.violations
     assert PolicyViolation.WEEKLY_LOSS_LIMIT.value in weekly.violations
+
+
+def test_policy_gate_rejects_shorts_by_default_for_small_cash_account():
+    gate = PolicyGate(account_equity=200)
+
+    result = gate.validate(
+        {
+            "ticker": "AAPL",
+            "asset_class": "stock",
+            "direction": "short",
+            "planned_entry": 100.0,
+            "stop": 101.0,
+            "target": 98.0,
+            "risk_dollars": 2.0,
+        }
+    )
+
+    assert result.ok is False
+    assert PolicyViolation.SHORTING_DISABLED.value in result.violations

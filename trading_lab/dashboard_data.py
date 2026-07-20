@@ -20,6 +20,7 @@ def build_dashboard_snapshot(
     live_enabled: bool,
     broker_orders_enabled: bool = False,
     scanner_path: str | Path | None = None,
+    telemetry_path: str | Path | None = None,
 ) -> dict[str, Any]:
     proposals = store.list_proposals()
     positions = store.list_paper_positions()
@@ -27,8 +28,14 @@ def build_dashboard_snapshot(
     active_positions = [p for p in positions if p["status"] in {"pending_entry", "open"}]
     proposals_by_strategy = dict(sorted(Counter(p["strategy_id"] for p in proposals).items()))
     positions_by_status = dict(sorted(Counter(p["status"] for p in positions).items()))
-    metrics = summarize_trades(trades)
+    strategy_by_proposal = {int(p["id"]): p["strategy_id"] for p in proposals}
+    attributed_trades = [
+        {**trade, "strategy_id": strategy_by_proposal.get(int(trade["proposal_id"]), "unknown")}
+        for trade in trades
+    ]
+    metrics = summarize_trades(attributed_trades)
     scanner = _load_scanner(scanner_path)
+    runtime = _load_runtime(telemetry_path)
     return {
         "generated_at": datetime.now(ET).isoformat(timespec="seconds"),
         "mode": "paper_proposal_only_no_orders" if not broker_orders_enabled else "broker_paper_execution",
@@ -51,6 +58,7 @@ def build_dashboard_snapshot(
         "latest_proposals": [_proposal_card(p) for p in proposals[-20:]][::-1],
         "latest_trades": [_trade_card(t) for t in trades[-20:]][::-1],
         "scanner": scanner,
+        "runtime": runtime,
         "readiness": _readiness(live_enabled=live_enabled, broker_orders_enabled=broker_orders_enabled, trades=trades, proposals=proposals),
     }
 
@@ -65,6 +73,20 @@ def _load_scanner(scanner_path: str | Path | None) -> dict[str, Any]:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return {"available": False, "watchlist": [], "top_matches": [], "path": str(path), "error": "invalid_json"}
+    payload["available"] = True
+    return payload
+
+
+def _load_runtime(telemetry_path: str | Path | None) -> dict[str, Any]:
+    if telemetry_path is None:
+        return {"available": False}
+    path = Path(telemetry_path)
+    if not path.exists():
+        return {"available": False, "path": str(path)}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"available": False, "path": str(path), "error": "invalid_json"}
     payload["available"] = True
     return payload
 

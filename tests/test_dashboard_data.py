@@ -42,3 +42,53 @@ def test_build_dashboard_snapshot_includes_safety_metrics_and_readiness(tmp_path
     assert snapshot["active_positions"][0]["ticker"] == "AAPL"
     assert snapshot["scanner"]["available"] is True
     assert snapshot["scanner"]["watchlist"] == ["SPY", "SOFI"]
+
+
+def test_dashboard_metrics_attribute_closed_trades_to_proposal_strategy(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    proposal_id = store.log_proposal(
+        ticker="QQQ",
+        strategy_id="vwap-reclaim",
+        direction="long",
+        trigger="reclaim",
+        planned_entry=100,
+        stop=99,
+        target=102,
+        thesis="test",
+        rule_checklist={},
+    )
+    position_id = store.create_paper_position(
+        proposal_id=proposal_id,
+        ticker="QQQ",
+        strategy_id="vwap-reclaim",
+        direction="long",
+        entry=100,
+        stop=99,
+        target=102,
+        position_size=1,
+        risk_dollars=1,
+        status="open",
+    )
+    store.close_position(position_id, closed_at="2026-07-20T10:00:00-04:00", exit_price=102, exit_reason="target")
+
+    snapshot = build_dashboard_snapshot(store, account_equity=200, live_enabled=False)
+
+    assert snapshot["metrics"]["by_strategy"]["vwap-reclaim"]["trade_count"] == 1
+    assert "unknown" not in snapshot["metrics"]["by_strategy"]
+
+
+def test_dashboard_snapshot_includes_latest_runtime_latency(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    telemetry = tmp_path / "runtime.json"
+    telemetry.write_text('{"timings_ms":{"total":869.1,"decision":5.51},"strategies":["orb","reclaim"]}')
+
+    snapshot = build_dashboard_snapshot(
+        store,
+        account_equity=200,
+        live_enabled=False,
+        telemetry_path=telemetry,
+    )
+
+    assert snapshot["runtime"]["available"] is True
+    assert snapshot["runtime"]["timings_ms"]["total"] == 869.1
+    assert snapshot["runtime"]["strategies"] == ["orb", "reclaim"]

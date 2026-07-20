@@ -12,6 +12,7 @@ class PolicyViolation(str, Enum):
     MISSING_STOP = "missing_stop"
     MISSING_TARGET = "missing_target"
     INVALID_DIRECTION = "invalid_direction"
+    SHORTING_DISABLED = "shorting_disabled"
     INVALID_RISK = "invalid_risk"
     RISK_TOO_HIGH = "risk_too_high"
     REWARD_RISK_TOO_LOW = "reward_risk_too_low"
@@ -41,10 +42,11 @@ class PolicyGate:
         max_risk_pct: float = 0.01,
         max_daily_loss_pct: float = 0.05,
         max_weekly_loss_pct: float = 0.12,
-        max_trades_per_day: int = 3,
+        max_trades_per_day: int = 5,
         min_reward_risk: float = 1.5,
         max_position_notional_pct: float = 2.0,
         min_stop_distance_pct: float = 0.001,
+        allow_short: bool = False,
     ) -> None:
         self.account_equity = float(account_equity)
         self.max_risk_pct = max_risk_pct
@@ -54,6 +56,7 @@ class PolicyGate:
         self.min_reward_risk = min_reward_risk
         self.max_position_notional_pct = max_position_notional_pct
         self.min_stop_distance_pct = min_stop_distance_pct
+        self.allow_short = allow_short
 
     def validate(
         self,
@@ -78,6 +81,8 @@ class PolicyGate:
             violations.append(PolicyViolation.BANNED_TICKER)
         if direction not in {"long", "short"}:
             violations.append(PolicyViolation.INVALID_DIRECTION)
+        if direction == "short" and not self.allow_short:
+            violations.append(PolicyViolation.SHORTING_DISABLED)
         if entry is None:
             violations.append(PolicyViolation.MISSING_ENTRY)
         if stop is None:

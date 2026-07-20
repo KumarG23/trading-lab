@@ -84,3 +84,33 @@ def test_generate_strategy_candidates_can_run_vwap_only():
     )
 
     assert [candidate["strategy_id"] for candidate in candidates] == ["vwap-trend-imbalance"]
+
+
+def test_generate_strategy_candidates_includes_reclaim_and_momentum_aliases():
+    reclaim_bars = [
+        _bar("AAPL", 0, 100.2, 99.8, 100.0, 1000),
+        _bar("AAPL", 1, 100.1, 99.8, 99.9, 1000),
+        _bar("AAPL", 2, 100.0, 99.7, 99.8, 1000),
+        _bar("AAPL", 3, 99.9, 99.6, 99.7, 1000),
+        _bar("AAPL", 4, 99.9, 99.5, 99.6, 1000),
+        {**_bar("AAPL", 5, 100.7, 99.5, 100.6, 1600), "open": 99.6},
+    ]
+    momentum_bars = [
+        _bar("AMD", 0, 100.3, 99.9, 100.2, 1000),
+        _bar("AMD", 1, 100.6, 100.1, 100.5, 1000),
+        _bar("AMD", 2, 100.9, 100.4, 100.8, 1000),
+        _bar("AMD", 3, 101.2, 100.7, 101.1, 1000),
+        _bar("AMD", 4, 101.5, 101.0, 101.4, 1000),
+        _bar("AMD", 5, 101.8, 101.3, 101.7, 1000),
+        _bar("AMD", 6, 101.8, 100.8, 101.1, 900),
+        _bar("AMD", 7, 102.2, 101.0, 102.1, 1500),
+    ]
+
+    candidates = generate_strategy_candidates(
+        reclaim_bars + momentum_bars,
+        symbols=["AAPL", "AMD"],
+        enabled_strategies=["reclaim", "momentum"],
+        risk_dollars=2.0,
+    )
+
+    assert {candidate["strategy_id"] for candidate in candidates} == {"vwap-reclaim", "momentum-pullback"}

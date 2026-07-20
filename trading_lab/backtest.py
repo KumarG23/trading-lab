@@ -25,8 +25,8 @@ def run_strategy_backtest(
     a tick-accurate exchange simulator. It is the first sieve for killing bad
     ideas before they get broker-paper privileges.
     """
-    ordered = sorted(bars, key=lambda item: (str(item["symbol"]).upper(), str(item["timestamp"])))
-    candidates = generate_strategy_candidates(
+    ordered = sorted(bars, key=lambda item: (str(item["timestamp"]), str(item["symbol"]).upper()))
+    candidate_sessions = _generate_replay_candidates(
         ordered,
         symbols=symbols,
         enabled_strategies=enabled_strategies,
@@ -34,15 +34,16 @@ def run_strategy_backtest(
         opening_range_minutes=opening_range_minutes,
         account_equity=account_equity,
     )
+    candidates = [candidate for candidate, _session_bars in candidate_sessions]
     gate = PolicyGate(account_equity=account_equity)
     trades: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
-    for candidate in candidates:
+    for candidate, session_bars in candidate_sessions:
         decision = gate.validate(candidate)
         if not decision.ok:
             rejected.append({"ticker": candidate.get("ticker"), "strategy_id": candidate.get("strategy_id"), "violations": decision.violations})
             continue
-        trade = _simulate_candidate(candidate, ordered, position_size=float(decision.position_size or 0.0), entry_slippage_bps=entry_slippage_bps, exit_slippage_bps=exit_slippage_bps)
+        trade = _simulate_candidate(candidate, session_bars, position_size=float(decision.position_size or 0.0), entry_slippage_bps=entry_slippage_bps, exit_slippage_bps=exit_slippage_bps)
         if trade:
             trades.append(trade)
     return {
@@ -57,6 +58,48 @@ def run_strategy_backtest(
         "metrics": summarize_trades(trades),
         "trade_rows": trades,
     }
+
+
+def _generate_replay_candidates(
+    bars: list[dict[str, Any]],
+    *,
+    symbols: list[str],
+    enabled_strategies: list[str],
+    risk_dollars: float,
+    opening_range_minutes: int,
+    account_equity: float,
+) -> list[tuple[dict[str, Any], list[dict[str, Any]]]]:
+    sessions: dict[str, list[dict[str, Any]]] = {}
+    for bar in bars:
+        session = str(bar["timestamp"])[:10]
+        sessions.setdefault(session, []).append(bar)
+    replay: list[tuple[dict[str, Any], list[dict[str, Any]]]] = []
+    for session_bars in sessions.values():
+        ordered_session = sorted(session_bars, key=lambda item: (str(item["timestamp"]), str(item["symbol"]).upper()))
+        timestamps = sorted({str(bar["timestamp"]) for bar in ordered_session})
+        seen: set[tuple[str, str, str]] = set()
+        for timestamp in timestamps:
+            visible = [bar for bar in ordered_session if str(bar["timestamp"]) <= timestamp]
+            candidates = generate_strategy_candidates(
+                visible,
+                symbols=symbols,
+                enabled_strategies=enabled_strategies,
+                risk_dollars=risk_dollars,
+                opening_range_minutes=opening_range_minutes,
+                account_equity=account_equity,
+                live_latest_only=True,
+            )
+            for candidate in candidates:
+                key = (
+                    str(candidate["strategy_id"]),
+                    str(candidate["ticker"]),
+                    str(candidate["direction"]),
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+                replay.append((candidate, ordered_session))
+    return replay
 
 
 def _simulate_candidate(
@@ -80,7 +123,7 @@ def _simulate_candidate(
         if str(bar["symbol"]).upper() != symbol:
             continue
         ts = str(bar["timestamp"])
-        if signal_ts and ts < signal_ts:
+        if signal_ts and ts <= signal_ts:
             continue
         high = float(bar["high"])
         low = float(bar["low"])
