@@ -102,3 +102,9 @@ python3 analysis/journal_metrics.py
 - Illiquid trash
 - Fully autonomous live execution
 - Robinhood MCP connection
+
+## Architecture and audits
+
+- [`docs/target-architecture-and-profitability-roadmap.md`](docs/target-architecture-and-profitability-roadmap.md) — evidence-first target architecture and phased promotion gates
+- [`reports/claude-fable5-architecture-audit-2026-07-23.md`](reports/claude-fable5-architecture-audit-2026-07-23.md) — independent adversarial architecture audit
+- [`reports/claude-opus-audit-2026-07-23.md`](reports/claude-opus-audit-2026-07-23.md) — earlier implementation and readiness audit
