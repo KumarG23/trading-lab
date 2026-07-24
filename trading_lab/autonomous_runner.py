@@ -3,11 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Protocol
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from trading_lab.journal_store import JournalStore
 from trading_lab.lanes import is_portfolio_admitted
 from trading_lab.policy_gate import PolicyGate
+from trading_lab.provenance import candidate_event_provenance
 
 ET = ZoneInfo("America/New_York")
 
@@ -44,6 +46,7 @@ class AutonomousRunner:
         max_reviews_per_run: int | None = None,
         max_active_positions: int | None = 2,
         max_trades_per_day: int = 50,
+        run_provenance: dict[str, Any] | None = None,
     ) -> None:
         self.store = store
         self.worker = worker or DeterministicWorker()
@@ -56,6 +59,9 @@ class AutonomousRunner:
         self.create_paper_positions = create_paper_positions
         self.max_reviews_per_run = max_reviews_per_run
         self.max_active_positions = max_active_positions
+        self.run_provenance = dict(run_provenance or {})
+        self.run_provenance.setdefault("run_id", str(uuid4()))
+        self.run_provenance.setdefault("decision_at", datetime.now(ZoneInfo("UTC")).isoformat(timespec="seconds"))
 
     def process_candidates(self, candidates: list[dict[str, Any]]) -> list[int]:
         proposal_ids: list[int] = []
@@ -78,6 +84,7 @@ class AutonomousRunner:
         if self.create_paper_positions and self.max_active_positions is not None:
             active_slots = max(0, self.max_active_positions - self._active_portfolio_count())
         for candidate in candidates:
+            provenance = candidate_event_provenance(candidate, self.run_provenance)
             decision = self.gate.validate(
                 candidate,
                 trades_today=research_proposals_today,
@@ -89,6 +96,7 @@ class AutonomousRunner:
                     candidate,
                     disposition="policy_rejected",
                     disposition_reason={"policy_violations": decision.violations},
+                    provenance=provenance,
                 )
                 continue
             duplicate = self.store.recent_duplicate_proposal(
@@ -105,6 +113,7 @@ class AutonomousRunner:
                     candidate,
                     disposition="duplicate",
                     disposition_reason={"duplicate_of_proposal_id": int(duplicate["id"])},
+                    provenance=provenance,
                 )
                 continue
             if self.max_reviews_per_run is not None and review_attempts >= self.max_reviews_per_run:
@@ -178,6 +187,7 @@ class AutonomousRunner:
                     "local_worker_shadow_status": str(review.get("shadow_status") or "unknown"),
                     "local_worker_shadow_approved": bool(review.get("approved", False)),
                 },
+                candidate_provenance=provenance,
             )
             if self.create_paper_positions:
                 self.store.create_paper_position(

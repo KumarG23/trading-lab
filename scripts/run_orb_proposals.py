@@ -7,6 +7,7 @@ from datetime import datetime, time, timezone
 from pathlib import Path
 import sys
 from time import perf_counter
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,6 +19,7 @@ from trading_lab.config import LabConfig  # noqa: E402
 from trading_lab.journal_store import JournalStore  # noqa: E402
 from trading_lab.local_worker import LocalAIWorker  # noqa: E402
 from trading_lab.paper_lifecycle import completed_bar_end, entry_window_open, market_is_open, update_paper_positions  # noqa: E402
+from trading_lab.provenance import repository_code_sha, stable_config_hash  # noqa: E402
 from trading_lab.run_telemetry import write_run_telemetry  # noqa: E402
 from trading_lab.strategy_suite import generate_strategy_candidates  # noqa: E402
 from trading_lab.training_export import export_training_examples  # noqa: E402
@@ -112,6 +114,19 @@ def main() -> int:
         timeout=120,
     )
     decision_started = perf_counter()
+    run_config = {
+        "symbols": symbols,
+        "strategies": strategies,
+        "risk_dollars": risk_dollars,
+        "opening_range_minutes": args.opening_range_minutes,
+        "bullish_regime_filter": args.bullish_regime_filter,
+        "max_reviews_per_run": args.max_reviews_per_run,
+        "max_active_positions": args.max_active_positions,
+        "max_trades_per_day": args.max_trades_per_day,
+        "entry_slippage_bps": args.entry_slippage_bps,
+        "exit_slippage_bps": args.exit_slippage_bps,
+        "fee_per_share": args.fee_per_share,
+    }
     proposal_ids = AutonomousRunner(
         store=store,
         worker=worker,
@@ -119,6 +134,12 @@ def main() -> int:
         max_reviews_per_run=args.max_reviews_per_run,
         max_active_positions=args.max_active_positions,
         max_trades_per_day=args.max_trades_per_day,
+        run_provenance={
+            "run_id": str(uuid4()),
+            "decision_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "code_sha": repository_code_sha(ROOT),
+            "config_hash": stable_config_hash(run_config),
+        },
     ).process_candidates(candidates)
     decision_finished = perf_counter()
     export_started = perf_counter()

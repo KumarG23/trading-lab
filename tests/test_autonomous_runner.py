@@ -1,3 +1,6 @@
+import hashlib
+from pathlib import Path
+
 from trading_lab.autonomous_runner import AutonomousRunner
 from trading_lab.journal_store import JournalStore
 
@@ -71,6 +74,44 @@ def test_autonomous_runner_persists_every_generated_candidate_event(tmp_path):
     assert len(store.list_paper_positions()) == 1
 
 
+def test_candidate_event_captures_decision_time_features_and_run_provenance(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    runner = AutonomousRunner(
+        store=store,
+        worker=FakeWorker(),
+        account_equity=1000,
+        run_provenance={
+            "run_id": "run-20260724-001",
+            "decision_at": "2026-07-24T10:06:30-04:00",
+            "code_sha": "abc123",
+            "config_hash": "config456",
+        },
+    )
+
+    candidate = _good_candidate()
+    candidate["market_context"] = {
+        "signal_timestamp": "2026-07-23T13:35:00Z",
+        "opening_range_high": 100.0,
+    }
+    runner.process_candidates([candidate])
+
+    event = store.list_candidate_events()[0]
+    assert event["run_id"] == "run-20260724-001"
+    assert event["decision_at"] == "2026-07-24T10:06:30-04:00"
+    assert event["data_cutoff_at"] == "2026-07-23T13:36:00Z"
+    assert event["code_sha"] == "abc123"
+    assert event["config_hash"] == "config456"
+    assert event["feature_schema_version"] == "candidate-features-v1"
+    assert event["strategy_version"] == "1"
+    package = Path(__file__).parents[1] / "trading_lab"
+    expected_hash = hashlib.sha256(
+        (package / "opening_range_breakout.py").read_bytes() + (package / "strategy_suite.py").read_bytes()
+    ).hexdigest()
+    assert event["strategy_hash"] == expected_hash
+    assert event["features"]["planned_entry"] == 101.0
+    assert event["features"]["market_context"]["opening_range_high"] == 100.0
+
+
 def test_candidate_ledger_survives_malformed_policy_rejections(tmp_path):
     store = JournalStore(tmp_path / "lab.db")
     runner = AutonomousRunner(store=store, worker=FakeWorker(), account_equity=1000)
@@ -81,6 +122,8 @@ def test_candidate_ledger_survives_malformed_policy_rejections(tmp_path):
     missing_strategy.pop("strategy_id")
     non_numeric = _good_candidate("TEXT")
     non_numeric["planned_entry"] = "TBD"
+    non_numeric["market_context"] = "not-a-mapping"
+    non_numeric["rule_checklist"] = 42
 
     assert runner.process_candidates([invalid_direction, missing_identity, missing_strategy, non_numeric]) == []
 

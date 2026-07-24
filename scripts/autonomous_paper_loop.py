@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import sys
+from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -13,6 +15,7 @@ from trading_lab.autonomous_runner import AutonomousRunner  # noqa: E402
 from trading_lab.config import LabConfig  # noqa: E402
 from trading_lab.journal_store import JournalStore  # noqa: E402
 from trading_lab.local_worker import LocalAIWorker  # noqa: E402
+from trading_lab.provenance import repository_code_sha, stable_config_hash  # noqa: E402
 from trading_lab.training_memory import TrainingMemory  # noqa: E402
 
 
@@ -33,7 +36,22 @@ def main() -> int:
         model=cfg.local_model,
         training_memory=training_memory,
     )
-    runner = AutonomousRunner(store=store, worker=worker, account_equity=cfg.account_equity)
+    runner = AutonomousRunner(
+        store=store,
+        worker=worker,
+        account_equity=cfg.account_equity,
+        run_provenance={
+            "run_id": str(uuid4()),
+            "decision_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "code_sha": repository_code_sha(ROOT),
+            "config_hash": stable_config_hash({
+                "source": str(args.candidates_json),
+                "no_local_ai": args.no_local_ai,
+                "account_equity": cfg.account_equity,
+                "local_model": cfg.local_model,
+            }),
+        },
+    )
     ids = runner.process_candidates(candidates)
     print(json.dumps({"logged_proposal_ids": ids, "input_candidates": len(candidates)}, indent=2))
     return 0

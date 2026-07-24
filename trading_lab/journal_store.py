@@ -45,7 +45,16 @@ CREATE TABLE IF NOT EXISTS candidate_events (
     disposition TEXT NOT NULL,
     disposition_reason_json TEXT NOT NULL DEFAULT '{}',
     candidate_json TEXT NOT NULL,
-    proposal_id INTEGER REFERENCES proposals(id) ON DELETE SET NULL
+    proposal_id INTEGER REFERENCES proposals(id) ON DELETE SET NULL,
+    run_id TEXT NOT NULL DEFAULT '',
+    decision_at TEXT NOT NULL DEFAULT '',
+    data_cutoff_at TEXT,
+    code_sha TEXT NOT NULL DEFAULT 'unknown',
+    config_hash TEXT NOT NULL DEFAULT 'unknown',
+    feature_schema_version TEXT NOT NULL DEFAULT '',
+    strategy_version TEXT NOT NULL DEFAULT 'unknown',
+    strategy_hash TEXT NOT NULL DEFAULT '',
+    features_json TEXT NOT NULL DEFAULT '{}'
 );
 
 CREATE TABLE IF NOT EXISTS paper_trades (
@@ -131,6 +140,18 @@ def init_db(path: str | Path) -> None:
         _ensure_column(conn, "paper_trades", "fees", "REAL NOT NULL DEFAULT 0.0")
         _ensure_column(conn, "paper_positions", "fees", "REAL NOT NULL DEFAULT 0.0")
         _ensure_column(conn, "candidate_events", "proposal_id", "INTEGER REFERENCES proposals(id) ON DELETE SET NULL")
+        for column, definition in {
+            "run_id": "TEXT NOT NULL DEFAULT ''",
+            "decision_at": "TEXT NOT NULL DEFAULT ''",
+            "data_cutoff_at": "TEXT",
+            "code_sha": "TEXT NOT NULL DEFAULT 'unknown'",
+            "config_hash": "TEXT NOT NULL DEFAULT 'unknown'",
+            "feature_schema_version": "TEXT NOT NULL DEFAULT ''",
+            "strategy_version": "TEXT NOT NULL DEFAULT 'unknown'",
+            "strategy_hash": "TEXT NOT NULL DEFAULT ''",
+            "features_json": "TEXT NOT NULL DEFAULT '{}'",
+        }.items():
+            _ensure_column(conn, "candidate_events", column, definition)
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
@@ -177,6 +198,7 @@ class JournalStore:
         candidate_event: dict[str, Any] | None = None,
         candidate_disposition: str | None = None,
         candidate_disposition_reason: dict[str, Any] | None = None,
+        candidate_provenance: dict[str, Any] | None = None,
     ) -> int:
         with self._conn() as conn:
             cur = conn.execute(
@@ -202,6 +224,7 @@ class JournalStore:
                     disposition=candidate_disposition,
                     disposition_reason=candidate_disposition_reason,
                     proposal_id=proposal_id,
+                    provenance=candidate_provenance,
                 )
             return proposal_id
 
@@ -211,6 +234,7 @@ class JournalStore:
         *,
         disposition: str,
         disposition_reason: dict[str, Any] | None = None,
+        provenance: dict[str, Any] | None = None,
     ) -> int:
         with self._conn() as conn:
             return _insert_candidate_event(
@@ -219,6 +243,7 @@ class JournalStore:
                 disposition=disposition,
                 disposition_reason=disposition_reason,
                 proposal_id=None,
+                provenance=provenance,
             )
 
     def list_candidate_events(self) -> list[dict[str, Any]]:
@@ -450,6 +475,8 @@ def _decode(row: sqlite3.Row) -> dict[str, Any]:
         data["disposition_reason"] = json.loads(data.pop("disposition_reason_json") or "{}")
     if "candidate_json" in data:
         data["candidate"] = json.loads(data.pop("candidate_json") or "{}")
+    if "features_json" in data:
+        data["features"] = json.loads(data.pop("features_json") or "{}")
     if "rule_adherent" in data:
         data["rule_adherent"] = bool(data["rule_adherent"])
     return data
@@ -479,22 +506,31 @@ def _insert_candidate_event(
     disposition: str,
     disposition_reason: dict[str, Any] | None,
     proposal_id: int | None,
+    provenance: dict[str, Any] | None,
 ) -> int:
     normalized = _json_safe(candidate)
     candidate_json = json.dumps(normalized, sort_keys=True, separators=(",", ":"), allow_nan=False)
     candidate_key = hashlib.sha256(candidate_json.encode("utf-8")).hexdigest()
+    provenance = provenance or {}
     cur = conn.execute(
         """
         INSERT INTO candidate_events (
             created_at, candidate_key, ticker, strategy_id, direction,
-            disposition, disposition_reason_json, candidate_json, proposal_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            disposition, disposition_reason_json, candidate_json, proposal_id,
+            run_id, decision_at, data_cutoff_at, code_sha, config_hash,
+            feature_schema_version, strategy_version, strategy_hash, features_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             now_et(), candidate_key, _text_or_none(candidate.get("ticker")),
             _text_or_none(candidate.get("strategy_id")), _text_or_none(candidate.get("direction")),
             disposition, json.dumps(_json_safe(disposition_reason or {}), sort_keys=True, allow_nan=False),
-            candidate_json, proposal_id,
+            candidate_json, proposal_id, str(provenance.get("run_id") or ""),
+            str(provenance.get("decision_at") or ""), _text_or_none(provenance.get("data_cutoff_at")),
+            str(provenance.get("code_sha") or "unknown"), str(provenance.get("config_hash") or "unknown"),
+            str(provenance.get("feature_schema_version") or ""), str(provenance.get("strategy_version") or "unknown"),
+            str(provenance.get("strategy_hash") or ""),
+            json.dumps(_json_safe(provenance.get("features") or {}), sort_keys=True, allow_nan=False),
         ),
     )
     if cur.lastrowid is None:
