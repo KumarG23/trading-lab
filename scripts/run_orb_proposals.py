@@ -17,7 +17,7 @@ from trading_lab.autonomous_runner import AutonomousRunner  # noqa: E402
 from trading_lab.config import LabConfig  # noqa: E402
 from trading_lab.journal_store import JournalStore  # noqa: E402
 from trading_lab.local_worker import LocalAIWorker  # noqa: E402
-from trading_lab.paper_lifecycle import entry_window_open, market_is_open, update_paper_positions  # noqa: E402
+from trading_lab.paper_lifecycle import completed_bar_end, entry_window_open, market_is_open, update_paper_positions  # noqa: E402
 from trading_lab.run_telemetry import write_run_telemetry  # noqa: E402
 from trading_lab.strategy_suite import generate_strategy_candidates  # noqa: E402
 from trading_lab.training_export import export_training_examples  # noqa: E402
@@ -68,7 +68,7 @@ def main() -> int:
     symbols = load_symbols(args.symbols, watchlist_file=args.watchlist_file)
     market_open_et = datetime.combine(now_et.date(), time(9, 30), ET)
     start = market_open_et.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-    end = now_et.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    end = completed_bar_end(now_et).astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
     client = AlpacaClient(base_url=cfg.alpaca_base_url, api_key=cfg.alpaca_api_key or "", secret_key=cfg.alpaca_secret_key or "")
     fetch_started = perf_counter()

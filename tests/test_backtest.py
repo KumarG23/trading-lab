@@ -70,6 +70,35 @@ def test_run_strategy_backtest_applies_slippage_to_entries_and_exits():
     assert slipped["trade_rows"][0]["fees"] > 0
 
 
+def test_run_strategy_backtest_flattens_unresolved_entry_at_session_end():
+    bars = [
+        _bar("AAPL", 0, 101.0, 99.0, 100.0, 1000),
+        _bar("AAPL", 1, 101.2, 99.2, 100.2, 1000),
+        _bar("AAPL", 2, 101.3, 99.3, 100.3, 1000),
+        _bar("AAPL", 3, 101.4, 99.4, 100.4, 1000),
+        _bar("AAPL", 4, 101.5, 99.5, 100.5, 1000),
+        _bar("AAPL", 5, 102.2, 101.6, 102.0, 2500),
+        _bar("AAPL", 6, 102.4, 101.9, 102.2, 2000),
+        _bar("AAPL", 7, 102.5, 102.0, 102.4, 1800),
+    ]
+
+    result = run_strategy_backtest(
+        bars,
+        symbols=["AAPL"],
+        enabled_strategies=["orb"],
+        account_equity=200.0,
+        risk_dollars=2.0,
+        exit_slippage_bps=10,
+        fee_per_share=0.005,
+    )
+
+    assert result["trades"] == 1
+    trade = result["trade_rows"][0]
+    assert trade["exit_reason"] == "eod_flatten"
+    assert trade["closed_at"].endswith("13:37:00Z")
+    assert trade["fees"] > 0
+
+
 def test_run_strategy_backtest_resets_intraday_state_for_each_session():
     bars = []
     for day in ("2026-06-29", "2026-06-30"):

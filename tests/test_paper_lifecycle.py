@@ -2,9 +2,15 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from trading_lab.journal_store import JournalStore
-from trading_lab.paper_lifecycle import entry_window_open, update_paper_positions
+from trading_lab.paper_lifecycle import completed_bar_end, entry_window_open, update_paper_positions
 
 ET = ZoneInfo("America/New_York")
+
+
+def test_completed_bar_end_excludes_the_current_partial_minute():
+    now = datetime(2026, 7, 24, 10, 30, 45, tzinfo=ET)
+
+    assert completed_bar_end(now) == datetime(2026, 7, 24, 10, 29, 59, tzinfo=ET)
 
 
 def test_entry_window_closes_at_configured_cutoff():

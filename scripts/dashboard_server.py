@@ -89,6 +89,7 @@ def render_dashboard(snapshot: dict) -> str:
     runtime = snapshot.get("runtime") or {}
     timings = runtime.get("timings_ms") or {}
     metrics = snapshot["metrics"]
+    performance = "".join(_kpi(*kpi) for kpi in performance_kpis(metrics))
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -151,11 +152,7 @@ footer {{ color:var(--muted); margin-top:18px; font-size:12px; font-family:ui-mo
   {_kpi('Proposals', snapshot['counts']['proposals'], 'all logged proposals')}
   {_kpi('Active', snapshot['counts']['active_positions'], 'simulated positions')}
   {_kpi('Trades', snapshot['metrics']['trade_count'], 'closed paper trades')}
-  {_kpi('Expectancy R', snapshot['metrics']['expectancy_r'], 'average R/trade')}
-  {_kpi('Total R', snapshot['metrics']['total_r'], 'closed paper trades')}
-  {_kpi('PnL', f"${metrics['total_pnl']:.2f}", 'simulated only')}
-  {_kpi('Profit Factor', metrics['profit_factor'], 'gross win / gross loss')}
-  {_kpi('Rule Adherence', f"{metrics['rule_adherence_rate']:.0%}", 'closed trades')}
+  {performance}
   <div class="card wide section"><h2>Active simulated positions</h2><div class="list">{active}</div></div>
   <div class="card wide section"><h2>Latest proposals</h2><div class="list">{proposals}</div></div>
   <div class="card wide section"><h2>Proposals by strategy</h2><div class="pills">{by_strategy}</div></div>
@@ -169,6 +166,24 @@ footer {{ color:var(--muted); margin-top:18px; font-size:12px; font-family:ui-mo
 
 def _kpi(label: str, value: object, hint: str) -> str:
     return f'<div class="card kpi"><div class="label">{label}</div><div class="value">{value}</div><div class="hint">{hint}</div></div>'
+
+
+def performance_kpis(metrics: dict) -> list[tuple[str, object, str]]:
+    trade_count = int(metrics.get("trade_count") or 0)
+    total_pnl = float(metrics.get("total_pnl") or 0)
+    average_pnl = total_pnl / trade_count if trade_count else 0.0
+    return [
+        ("P&L", _money(total_pnl), "simulated dollars"),
+        ("Average $ / trade", _money(average_pnl), "net after modeled costs"),
+        ("Total R", metrics.get("total_r", 0), "normalized risk units"),
+        ("Expectancy R", metrics.get("expectancy_r", 0), "average normalized risk/trade"),
+        ("Profit Factor", metrics.get("profit_factor", 0), "gross win / gross loss"),
+        ("Rule Adherence", f"{float(metrics.get('rule_adherence_rate') or 0):.0%}", "closed trades"),
+    ]
+
+
+def _money(value: float) -> str:
+    return f"{'+' if value >= 0 else '-'}${abs(value):.2f}"
 
 
 def _position_html(p: dict) -> str:

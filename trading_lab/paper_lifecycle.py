@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -9,6 +9,11 @@ from trading_lab.fill_engine import apply_slippage, entry_fill_price, exit_fill,
 from trading_lab.journal_store import JournalStore
 
 ET = ZoneInfo("America/New_York")
+
+
+def completed_bar_end(now: datetime) -> datetime:
+    """Latest timestamp guaranteed not to include the current partial minute."""
+    return now.replace(second=0, microsecond=0) - timedelta(seconds=1)
 
 
 def update_paper_positions(

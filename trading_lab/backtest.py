@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from trading_lab.fill_engine import entry_fill_price, exit_fill, round_trip_fees
+from trading_lab.fill_engine import apply_slippage, entry_fill_price, exit_fill, round_trip_fees
 from trading_lab.metrics import summarize_trades
 from trading_lab.policy_gate import PolicyGate
 from trading_lab.strategy_suite import generate_strategy_candidates
@@ -187,5 +187,43 @@ def _simulate_candidate(
                 "rule_adherent": True,
                 "exit_reason": exit_reason,
                 "close_at_bar": close,
+            }
+    if entered and entered_at is not None:
+        last_bar = next(
+            (
+                bar
+                for bar in reversed(bars)
+                if str(bar["symbol"]).upper() == symbol and str(bar["timestamp"]) >= entered_at
+            ),
+            None,
+        )
+        if last_bar is not None:
+            exit_price = apply_slippage(
+                float(last_bar["close"]),
+                direction=direction,
+                kind="exit",
+                bps=exit_slippage_bps,
+            )
+            fees = round_trip_fees(position_size, fee_per_share=fee_per_share)
+            gross_pnl = (exit_price - entry) * position_size if direction == "long" else (entry - exit_price) * position_size
+            pnl = gross_pnl - fees
+            planned_risk_dollars = float(candidate["risk_dollars"])
+            actual_r = pnl / planned_risk_dollars if planned_risk_dollars else 0.0
+            return {
+                "ticker": symbol,
+                "strategy_id": candidate["strategy_id"],
+                "direction": direction,
+                "created_at": signal_ts,
+                "entered_at": entered_at,
+                "closed_at": str(last_bar["timestamp"]),
+                "actual_entry": round(entry, 4),
+                "actual_exit": round(exit_price, 4),
+                "position_size": round(position_size, 4),
+                "pnl": round(pnl, 4),
+                "fees": fees,
+                "actual_r_multiple": round(actual_r, 4),
+                "rule_adherent": True,
+                "exit_reason": "eod_flatten",
+                "close_at_bar": float(last_bar["close"]),
             }
     return None
