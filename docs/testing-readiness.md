@@ -6,7 +6,9 @@ Date: 2026-06-29
 
 Ready for **local autonomous paper/proposal-loop smoke testing**.
 
-Not ready for broker-connected paper trading until Neal provides or confirms broker paper credentials and chooses Alpaca vs Robinhood.
+Current simulator topology (2026-07-23): all qualified nonduplicate signals enter the research lane, while only two simultaneous positions are marked `portfolio_admitted`. Research and portfolio metrics are reported separately. The research runaway cap is 50 proposals/day, dedupe is 30 minutes, new entries stop at 14:30 ET, and positions flatten at 15:45 ET.
+
+Not ready for broker-connected paper orders until order lifecycle, duplicate-order locks, fill tracking, and broker/local reconciliation are implemented and verified. Alpaca paper credentials are already configured for safe read-only access.
 
 ## What is ready
 

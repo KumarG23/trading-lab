@@ -17,7 +17,7 @@ from trading_lab.autonomous_runner import AutonomousRunner  # noqa: E402
 from trading_lab.config import LabConfig  # noqa: E402
 from trading_lab.journal_store import JournalStore  # noqa: E402
 from trading_lab.local_worker import LocalAIWorker  # noqa: E402
-from trading_lab.paper_lifecycle import market_is_open, update_paper_positions  # noqa: E402
+from trading_lab.paper_lifecycle import entry_window_open, market_is_open, update_paper_positions  # noqa: E402
 from trading_lab.run_telemetry import write_run_telemetry  # noqa: E402
 from trading_lab.strategy_suite import generate_strategy_candidates  # noqa: E402
 from trading_lab.training_export import export_training_examples  # noqa: E402
@@ -26,6 +26,7 @@ from trading_lab.watchlist import load_symbols  # noqa: E402
 
 ET = ZoneInfo("America/New_York")
 DEFAULT_WATCHLIST = ["AAPL", "MSFT", "NVDA", "AMD", "TSLA", "META", "AMZN", "GOOGL", "SPY", "QQQ"]
+NO_NEW_ENTRIES_AFTER = "14:30"
 
 
 def main() -> int:
@@ -39,8 +40,9 @@ def main() -> int:
     parser.add_argument("--strategies", default="orb,vwap,reclaim,momentum", help="Comma-separated strategy aliases: orb,vwap,reclaim,momentum")
     parser.add_argument("--bullish-regime-filter", action="store_true", help="Require SPY above rising intraday VWAP for long candidates")
     parser.add_argument("--no-local-ai", action="store_true")
-    parser.add_argument("--max-reviews-per-run", type=int, default=3, help="Cap model-reviewed candidates per tick to prevent slow local model overlap")
-    parser.add_argument("--max-active-positions", type=int, default=2, help="Cap concurrent open/pending simulated positions")
+    parser.add_argument("--max-reviews-per-run", type=int, default=50, help="Research-candidate runaway cap per tick")
+    parser.add_argument("--max-active-positions", type=int, default=2, help="Cap portfolio-admitted positions; research-only positions continue to be tracked")
+    parser.add_argument("--max-trades-per-day", type=int, default=50, help="Research close/proposal runaway cap per day")
     parser.add_argument("--training-output", type=Path, default=ROOT / "training" / "proposal_outcomes.jsonl", help="Derived JSONL proposal/outcome examples for later evals/tuning")
     parser.add_argument("--telemetry-output", type=Path, default=ROOT / "data" / "processed" / "last-paper-watch.json", help="Latest scan/decision latency telemetry")
     parser.add_argument("--no-training-export", action="store_true", help="Skip updating the derived training JSONL")
@@ -75,7 +77,7 @@ def main() -> int:
     lifecycle = update_paper_positions(
         store,
         bars,
-        no_new_entries_after="11:30",
+        no_new_entries_after=NO_NEW_ENTRIES_AFTER,
         flatten_at="15:45",
     )
     lifecycle_finished = perf_counter()
@@ -92,6 +94,8 @@ def main() -> int:
         live_latest_only=True,
         require_bullish_market_regime=args.bullish_regime_filter,
     )
+    if not entry_window_open(now_et, NO_NEW_ENTRIES_AFTER):
+        candidates = []
     strategy_finished = perf_counter()
 
     training_memory = TrainingMemory(ROOT / "training" / "claude_bot_sanitized_examples.jsonl")
@@ -108,6 +112,7 @@ def main() -> int:
         account_equity=cfg.account_equity,
         max_reviews_per_run=args.max_reviews_per_run,
         max_active_positions=args.max_active_positions,
+        max_trades_per_day=args.max_trades_per_day,
     ).process_candidates(candidates)
     decision_finished = perf_counter()
     export_started = perf_counter()
@@ -134,6 +139,7 @@ def main() -> int:
         "candidates": len(candidates),
         "max_reviews_per_run": args.max_reviews_per_run,
         "max_active_positions": args.max_active_positions,
+        "max_trades_per_day": args.max_trades_per_day,
         "logged_proposal_ids": proposal_ids,
         "lifecycle": lifecycle,
         "training_export": training_export,

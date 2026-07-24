@@ -121,6 +121,11 @@ def update_paper_positions(
     return {"events": events, "event_count": len(events), "active_positions": len(store.list_active_paper_positions())}
 
 
+def entry_window_open(now: datetime, no_new_entries_after: str | None) -> bool:
+    cutoff = _parse_clock(no_new_entries_after)
+    return cutoff is None or now.astimezone(ET).time() < cutoff
+
+
 def market_is_open(now: datetime | None = None) -> bool:
     now = now or datetime.now(ET)
     if now.weekday() >= 5:

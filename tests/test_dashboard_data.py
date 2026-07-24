@@ -77,6 +77,45 @@ def test_dashboard_metrics_attribute_closed_trades_to_proposal_strategy(tmp_path
     assert "unknown" not in snapshot["metrics"]["by_strategy"]
 
 
+def test_dashboard_splits_research_metrics_from_portfolio_metrics(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    for ticker, admitted, exit_price, reason in (
+        ("AAPL", True, 103, "target"),
+        ("MSFT", False, 100, "stop"),
+    ):
+        proposal_id = store.log_proposal(
+            ticker=ticker,
+            strategy_id="opening-range-breakout",
+            direction="long",
+            trigger="breakout",
+            planned_entry=101,
+            stop=100,
+            target=103,
+            thesis="test",
+            rule_checklist={"portfolio_admitted": admitted},
+        )
+        position_id = store.create_paper_position(
+            proposal_id=proposal_id,
+            ticker=ticker,
+            strategy_id="opening-range-breakout",
+            direction="long",
+            entry=101,
+            stop=100,
+            target=103,
+            position_size=1,
+            risk_dollars=1,
+            status="open",
+        )
+        store.close_position(position_id, closed_at="2026-07-20T10:00:00-04:00", exit_price=exit_price, exit_reason=reason)
+
+    snapshot = build_dashboard_snapshot(store, account_equity=200, live_enabled=False)
+
+    assert snapshot["research_metrics"]["trade_count"] == 2
+    assert snapshot["portfolio_metrics"]["trade_count"] == 1
+    assert snapshot["portfolio_metrics"]["total_r"] == 2.0
+    assert snapshot["metrics"] == snapshot["portfolio_metrics"]
+
+
 def test_dashboard_snapshot_includes_latest_runtime_latency(tmp_path):
     store = JournalStore(tmp_path / "lab.db")
     telemetry = tmp_path / "runtime.json"

@@ -2,9 +2,17 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from trading_lab.journal_store import JournalStore
-from trading_lab.paper_lifecycle import update_paper_positions
+from trading_lab.paper_lifecycle import entry_window_open, update_paper_positions
 
 ET = ZoneInfo("America/New_York")
+
+
+def test_entry_window_closes_at_configured_cutoff():
+    before = datetime.now(ET).replace(hour=15, minute=29, second=59, microsecond=0)
+    at_cutoff = before.replace(minute=30, second=0)
+
+    assert entry_window_open(before, "15:30") is True
+    assert entry_window_open(at_cutoff, "15:30") is False
 
 
 def test_update_paper_positions_enters_and_closes_target(tmp_path):

@@ -60,10 +60,18 @@ def main() -> int:
         )
     ]
     active = [p for p in positions if p["status"] in {"pending_entry", "open"}]
+    proposal_portfolio_admission = {
+        int(proposal["id"]): json.loads(proposal["rule_checklist_json"] or "{}").get("portfolio_admitted", True)
+        for proposal in proposals
+    }
+    active_portfolio = [p for p in active if proposal_portfolio_admission.get(int(p["proposal_id"]), True)]
     by_strategy = Counter(p["strategy_id"] for p in proposals)
     by_status = Counter(p["status"] for p in positions)
     scanner = _load_scanner()
     closed_today = [p for p in positions if p["closed_at"] and str(p["closed_at"]) >= session_start and p["status"] == "closed"]
+    portfolio_closed_today = [
+        p for p in closed_today if proposal_portfolio_admission.get(int(p["proposal_id"]), True)
+    ]
     total_r = sum(float(p["r_multiple"] or 0) for p in closed_today)
     total_pnl = sum(float(p["pnl"] or 0) for p in closed_today)
 
@@ -87,6 +95,7 @@ def main() -> int:
             for strategy, stats in sorted(strategy_stats.items())
         ]
         r_values = [float(position.get("r_multiple") or 0) for position in closed_today]
+        portfolio_r_values = [float(position.get("r_multiple") or 0) for position in portfolio_closed_today]
         print(
             format_daily_summary(
                 {
@@ -103,8 +112,16 @@ def main() -> int:
                     "pnl": total_pnl,
                     "r": total_r,
                     "max_drawdown_r": max_drawdown_r(r_values),
+                    "portfolio_closes": len(portfolio_closed_today),
+                    "portfolio_wins": sum(1 for value in portfolio_r_values if value > 0),
+                    "portfolio_losses": sum(1 for value in portfolio_r_values if value < 0),
+                    "portfolio_pnl": sum(float(position.get("pnl") or 0) for position in portfolio_closed_today),
+                    "portfolio_r": sum(portfolio_r_values),
+                    "portfolio_max_drawdown_r": max_drawdown_r(portfolio_r_values),
                     "strategy_lines": strategy_lines,
                     "active_positions": len(active),
+                    "portfolio_active_positions": len(active_portfolio),
+                    "portfolio_position_limit": int(runtime.get("max_active_positions") or 2),
                     "errors": 0 if runtime.get("ok") else 1,
                     "blocker": "No strategy has passed walk-forward promotion gates.",
                 }
@@ -115,8 +132,8 @@ def main() -> int:
     lines = [
         f"Trading Lab progress — {now:%Y-%m-%d %I:%M %p %Z}",
         "Mode: paper proposal only; broker orders: 0; live trading: disabled",
-        f"Today: {len(proposals)} proposals, {len(trades)} simulated closes, PnL ${total_pnl:.2f}, R {total_r:.2f}",
-        f"Active simulated positions: {len(active)}",
+        f"Research today: {len(proposals)} proposals, {len(trades)} simulated closes, PnL ${total_pnl:.2f}, R {total_r:.2f}",
+        f"Active research positions: {len(active)}; portfolio-admitted: {len(active_portfolio)}/2",
         f"All position statuses: {dict(sorted(by_status.items()))}",
         f"Today's proposals by strategy: {dict(sorted(by_strategy.items()))}",
         f"Scanner watchlist: {', '.join(scanner.get('watchlist', [])[:15]) if scanner.get('watchlist') else 'not generated yet'}",

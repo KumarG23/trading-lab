@@ -87,16 +87,18 @@ def test_autonomous_runner_caps_model_reviews_per_run(tmp_path):
     assert [p["ticker"] for p in store.list_proposals()] == ["AAPL"]
 
 
-def test_autonomous_runner_caps_active_paper_positions_before_review(tmp_path):
+def test_autonomous_runner_tracks_all_research_candidates_but_caps_portfolio_admission(tmp_path):
     store = JournalStore(tmp_path / "lab.db")
     worker = FakeWorker()
     runner = AutonomousRunner(store=store, worker=worker, account_equity=1000, max_active_positions=1)
 
     ids = runner.process_candidates([_good_candidate("AAPL"), _good_candidate("MSFT")])
 
-    assert len(ids) == 1
-    assert worker.reviewed == ["AAPL"]
-    assert len(store.list_active_paper_positions()) == 1
+    proposals = store.list_proposals()
+    assert len(ids) == 2
+    assert worker.reviewed == ["AAPL", "MSFT"]
+    assert len(store.list_active_paper_positions()) == 2
+    assert [proposal["rule_checklist"]["portfolio_admitted"] for proposal in proposals] == [True, False]
 
 
 def test_autonomous_runner_prioritizes_underrepresented_strategy(tmp_path):
@@ -120,14 +122,17 @@ def test_autonomous_runner_prioritizes_underrepresented_strategy(tmp_path):
 
     ids = runner.process_candidates([orb, reclaim])
 
-    assert len(ids) == 1
-    assert worker.reviewed == ["QQQ"]
-    assert store.list_proposals()[-1]["strategy_id"] == "vwap-reclaim"
+    proposals = store.list_proposals()
+    assert len(ids) == 2
+    assert worker.reviewed == ["QQQ", "MSFT"]
+    assert proposals[-2]["strategy_id"] == "vwap-reclaim"
+    assert proposals[-2]["rule_checklist"]["portfolio_admitted"] is True
+    assert proposals[-1]["rule_checklist"]["portfolio_admitted"] is False
 
 
-def test_autonomous_runner_research_default_allows_more_than_five_trades(tmp_path):
+def test_autonomous_runner_research_default_allows_more_than_twenty_trades(tmp_path):
     store = JournalStore(tmp_path / "lab.db")
-    for index in range(5):
+    for index in range(20):
         proposal_id = store.log_proposal(
             ticker=f"T{index}",
             strategy_id="opening-range-breakout",
@@ -155,6 +160,62 @@ def test_autonomous_runner_research_default_allows_more_than_five_trades(tmp_pat
 
     assert len(ids) == 1
     assert worker.reviewed == ["MSFT"]
+
+
+def test_autonomous_runner_research_cap_counts_proposals_and_cannot_be_overshot_within_one_tick(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    for index in range(49):
+        store.log_proposal(
+            ticker=f"T{index}",
+            strategy_id="opening-range-breakout",
+            direction="long",
+            trigger="historical",
+            planned_entry=101,
+            stop=100,
+            target=103,
+            thesis="history",
+            rule_checklist={},
+        )
+    worker = FakeWorker()
+    runner = AutonomousRunner(store=store, worker=worker, account_equity=1000, max_active_positions=None)
+
+    ids = runner.process_candidates([_good_candidate("MSFT"), _good_candidate("NVDA")])
+
+    assert len(ids) == 1
+    assert len(store.list_proposals()) == 50
+
+
+def test_autonomous_runner_keeps_research_capture_running_after_portfolio_loss_breaker(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    proposal_id = store.log_proposal(
+        ticker="AAPL",
+        strategy_id="opening-range-breakout",
+        direction="long",
+        trigger="historical loss",
+        planned_entry=101,
+        stop=100,
+        target=103,
+        thesis="history",
+        rule_checklist={"portfolio_admitted": True},
+    )
+    store.log_paper_trade(
+        proposal_id=proposal_id,
+        actual_entry=101,
+        actual_exit=95,
+        position_size=10,
+        pnl=-60,
+        actual_r_multiple=-6,
+        rule_adherent=True,
+    )
+    worker = FakeWorker()
+    runner = AutonomousRunner(store=store, worker=worker, account_equity=1000, max_active_positions=2)
+
+    ids = runner.process_candidates([_good_candidate("MSFT")])
+
+    assert len(ids) == 1
+    proposal = store.list_proposals()[-1]
+    assert proposal["ticker"] == "MSFT"
+    assert proposal["rule_checklist"]["portfolio_admitted"] is False
 
 
 def test_autonomous_runner_uses_net_realized_pnl_for_loss_circuit_breaker(tmp_path):

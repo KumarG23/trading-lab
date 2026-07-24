@@ -38,11 +38,11 @@ class AutonomousRunner:
         worker: ProposalWorker | None = None,
         account_equity: float,
         max_risk_pct: float = 0.01,
-        dedupe_minutes: int = 390,
+        dedupe_minutes: int = 30,
         create_paper_positions: bool = True,
         max_reviews_per_run: int | None = None,
         max_active_positions: int | None = 2,
-        max_trades_per_day: int = 20,
+        max_trades_per_day: int = 50,
     ) -> None:
         self.store = store
         self.worker = worker or DeterministicWorker()
@@ -71,16 +71,17 @@ class AutonomousRunner:
                 str(candidate.get("ticker") or ""),
             ),
         )
-        trades_today, daily_realized_loss, weekly_realized_loss = self._risk_state()
+        research_proposals_today = self._research_proposals_today()
+        portfolio_trades_today, portfolio_daily_loss, portfolio_weekly_loss = self._risk_state(portfolio_only=True)
         active_slots = None
         if self.create_paper_positions and self.max_active_positions is not None:
-            active_slots = max(0, self.max_active_positions - len(self.store.list_active_paper_positions()))
+            active_slots = max(0, self.max_active_positions - self._active_portfolio_count())
         for candidate in candidates:
             decision = self.gate.validate(
                 candidate,
-                trades_today=trades_today,
-                daily_realized_loss=daily_realized_loss,
-                weekly_realized_loss=weekly_realized_loss,
+                trades_today=research_proposals_today,
+                daily_realized_loss=0.0,
+                weekly_realized_loss=0.0,
             )
             if not decision.ok:
                 continue
@@ -94,8 +95,6 @@ class AutonomousRunner:
                 within_minutes=self.dedupe_minutes,
             ):
                 continue
-            if active_slots is not None and active_slots <= 0:
-                break
             if self.max_reviews_per_run is not None and review_attempts >= self.max_reviews_per_run:
                 break
             review_attempts += 1
@@ -103,6 +102,13 @@ class AutonomousRunner:
             if not review.get("approved", False):
                 continue
             checklist = dict(candidate.get("rule_checklist") or {})
+            portfolio_decision = self.gate.validate(
+                candidate,
+                trades_today=portfolio_trades_today,
+                daily_realized_loss=portfolio_daily_loss,
+                weekly_realized_loss=portfolio_weekly_loss,
+            )
+            portfolio_admitted = (active_slots is None or active_slots > 0) and portfolio_decision.ok
             checklist.update(
                 {
                     "policy_approved": True,
@@ -112,6 +118,7 @@ class AutonomousRunner:
                     "position_notional": decision.position_notional,
                     "stop_distance_pct": decision.stop_distance_pct,
                     "local_worker_reviewed": review.get("model_used") not in {None, "deterministic"},
+                    "portfolio_admitted": portfolio_admitted,
                 }
             )
             proposal_id = self.store.log_proposal(
@@ -141,19 +148,48 @@ class AutonomousRunner:
                     risk_dollars=float(candidate["risk_dollars"]),
                     status="pending_entry",
                 )
-                if active_slots is not None:
+                if active_slots is not None and portfolio_admitted:
                     active_slots -= 1
             proposal_ids.append(proposal_id)
+            research_proposals_today += 1
         return proposal_ids
 
-    def _risk_state(self) -> tuple[int, float, float]:
+    def _research_proposals_today(self) -> int:
+        today = datetime.now(ET).date()
+        count = 0
+        for proposal in self.store.list_proposals():
+            try:
+                proposal_date = datetime.fromisoformat(str(proposal["created_at"])).astimezone(ET).date()
+            except (TypeError, ValueError):
+                continue
+            if proposal_date == today:
+                count += 1
+        return count
+
+    def _active_portfolio_count(self) -> int:
+        proposals = {int(row["id"]): row for row in self.store.list_proposals()}
+        count = 0
+        for position in self.store.list_active_paper_positions():
+            proposal = proposals.get(int(position["proposal_id"]), {})
+            checklist = proposal.get("rule_checklist") or {}
+            if checklist.get("portfolio_admitted", True):
+                count += 1
+        return count
+
+    def _risk_state(self, *, portfolio_only: bool = False) -> tuple[int, float, float]:
         now = datetime.now(ET)
         today = now.date()
         week_start = today - timedelta(days=today.weekday())
         trades_today = 0
         daily_loss = 0.0
         weekly_loss = 0.0
+        proposals = {int(row["id"]): row for row in self.store.list_proposals()} if portfolio_only else {}
         for trade in self.store.list_paper_trades():
+            if portfolio_only:
+                proposal = proposals.get(int(trade["proposal_id"]), {})
+                checklist = proposal.get("rule_checklist") or {}
+                if not checklist.get("portfolio_admitted", True):
+                    continue
             try:
                 trade_date = datetime.fromisoformat(str(trade["created_at"])).astimezone(ET).date()
             except (TypeError, ValueError):

@@ -8,6 +8,11 @@ Risk is allowed. Unbounded stupidity is not.
 
 Current phase: paper/proposal mode.
 
+The simulator has two explicit analytical lanes:
+
+- **Research lane:** record and resolve every policy-approved, nonduplicate candidate, up to a 50-proposal/day runaway cap. Research loss does not stop evidence collection.
+- **Portfolio lane:** mark at most two simultaneous research positions as `portfolio_admitted`; apply portfolio loss breakers and report its metrics separately. This is an execution-shaped comparison lane, not broker execution.
+
 Until explicitly upgraded:
 
 - No Robinhood MCP connection.
@@ -88,16 +93,24 @@ A strategy with one glorious win and no discipline is not a strategy. It is a sl
 
 ## Promotion gates
 
-A strategy may move from paper/proposal to tiny-live candidate only after:
+A strategy may move from proposal simulation to broker-paper orders only after:
 
-- at least 30 logged paper/proposal trades, preferably 50+
+- at least 50 independent forward/out-of-sample outcomes for that strategy across at least 30 representative sessions
 - positive expectancy after estimated slippage/fees
 - profit factor above 1.2
-- max drawdown inside policy limits
-- rule adherence above 85%
-- documented failure modes
+- session-clustered max drawdown inside policy limits
+- rule adherence above 95%
+- documented failure modes and stable results across more than one market regime
+- order lifecycle, duplicate-order locks, and broker reconciliation implemented and tested
 - Jarvis risk review
-- Neal explicit approval
+
+A strategy may move from broker-paper to tiny-live candidate only after:
+
+- at least 30 broker-paper sessions using the same execution path intended for live orders
+- at least 50 correctly reconciled fills with measured slippage close to the model
+- zero unresolved duplicate-order, stale-data, reconciliation, or risk-gate failures
+- a tested kill switch and recovery drill
+- Jarvis risk review and Neal explicit approval
 
 ## Circuit breakers
 

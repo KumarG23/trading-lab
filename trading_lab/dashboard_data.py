@@ -25,15 +25,27 @@ def build_dashboard_snapshot(
     proposals = store.list_proposals()
     positions = store.list_paper_positions()
     trades = store.list_paper_trades()
-    active_positions = [p for p in positions if p["status"] in {"pending_entry", "open"}]
+    active_research_positions = [p for p in positions if p["status"] in {"pending_entry", "open"}]
     proposals_by_strategy = dict(sorted(Counter(p["strategy_id"] for p in proposals).items()))
     positions_by_status = dict(sorted(Counter(p["status"] for p in positions).items()))
-    strategy_by_proposal = {int(p["id"]): p["strategy_id"] for p in proposals}
+    proposals_by_id = {int(p["id"]): p for p in proposals}
+    strategy_by_proposal = {proposal_id: p["strategy_id"] for proposal_id, p in proposals_by_id.items()}
     attributed_trades = [
         {**trade, "strategy_id": strategy_by_proposal.get(int(trade["proposal_id"]), "unknown")}
         for trade in trades
     ]
-    metrics = summarize_trades(attributed_trades)
+    portfolio_trades = [
+        trade
+        for trade in attributed_trades
+        if (proposals_by_id.get(int(trade["proposal_id"]), {}).get("rule_checklist") or {}).get("portfolio_admitted", True)
+    ]
+    active_portfolio_positions = [
+        position
+        for position in active_research_positions
+        if (proposals_by_id.get(int(position["proposal_id"]), {}).get("rule_checklist") or {}).get("portfolio_admitted", True)
+    ]
+    research_metrics = summarize_trades(attributed_trades)
+    portfolio_metrics = summarize_trades(portfolio_trades)
     scanner = _load_scanner(scanner_path)
     runtime = _load_runtime(telemetry_path)
     return {
@@ -48,13 +60,19 @@ def build_dashboard_snapshot(
         "counts": {
             "proposals": len(proposals),
             "positions": len(positions),
-            "active_positions": len(active_positions),
+            "active_positions": len(active_portfolio_positions),
+            "research_active_positions": len(active_research_positions),
+            "portfolio_active_positions": len(active_portfolio_positions),
             "paper_trades": len(trades),
+            "portfolio_trades": len(portfolio_trades),
         },
         "proposals_by_strategy": proposals_by_strategy,
         "positions_by_status": positions_by_status,
-        "metrics": metrics,
-        "active_positions": [_position_card(p) for p in active_positions[-12:]],
+        "metrics": portfolio_metrics,
+        "portfolio_metrics": portfolio_metrics,
+        "research_metrics": research_metrics,
+        "active_positions": [_position_card(p) for p in active_portfolio_positions[-12:]],
+        "research_active_positions": [_position_card(p) for p in active_research_positions[-20:]],
         "latest_proposals": [_proposal_card(p) for p in proposals[-20:]][::-1],
         "latest_trades": [_trade_card(t) for t in trades[-20:]][::-1],
         "scanner": scanner,
