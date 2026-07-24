@@ -92,10 +92,26 @@ def build_readiness(
         blockers.append(f"resolved_candidates_below_{minimum_candidates}:{resolved_count}")
     if dataset_manifest is None:
         blockers.append("dataset_manifest_missing")
+    else:
+        code_sha = str(dataset_manifest.get("code_sha") or "unknown")
+        if len(code_sha) != 40 or any(character not in "0123456789abcdef" for character in code_sha.lower()):
+            blockers.append(f"dataset_code_sha_not_clean:{code_sha}")
+        dataset_sha = str(dataset_manifest.get("dataset_sha256") or "")
+        if len(dataset_sha) != 64 or any(character not in "0123456789abcdef" for character in dataset_sha.lower()):
+            blockers.append("dataset_sha256_invalid")
+        if not dataset_manifest.get("schema_version"):
+            blockers.append("dataset_schema_version_missing")
+        if not dataset_manifest.get("source"):
+            blockers.append("dataset_source_missing")
     if model_evaluation is None:
         blockers.append("model_evaluation_missing")
-    elif not bool(model_evaluation.get("all_promotion_gates_pass")):
-        blockers.append("model_evaluation_gates_failed")
+    else:
+        if model_evaluation.get("status") != "evaluated":
+            blockers.append("model_evaluation_not_evaluated")
+        if model_evaluation.get("split_policy") != "purged_walk_forward_no_random_split":
+            blockers.append("model_evaluation_split_policy_invalid")
+        if not bool(model_evaluation.get("all_promotion_gates_pass")):
+            blockers.append("model_evaluation_gates_failed")
     quality_failures = sum(1 for row in outcome_rows if row.get("data_quality_flags"))
     if quality_failures:
         blockers.append(f"candidate_outcome_quality_flags:{quality_failures}")

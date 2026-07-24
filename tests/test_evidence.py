@@ -74,3 +74,29 @@ def test_readiness_can_use_historical_evidence_rows_instead_of_live_db(tmp_path)
     assert readiness["counts"]["resolved_candidates"] == 1
     assert readiness["counts"]["by_strategy"] == {"orb": 1}
     assert "resolved_candidates_below_1:1" not in readiness["blockers"]
+
+
+def test_readiness_blocks_dirty_or_incomplete_provenance_even_when_model_gates_pass(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    rows = [{
+        "candidate": {"strategy_id": "orb", "market_context": {"signal_timestamp": "2026-07-20T13:35:00Z"}},
+        "outcome": {"fill_status": "filled", "data_quality_flags": []},
+    }]
+    manifest = {
+        "dataset_sha256": "a" * 64,
+        "code_sha": "abc-dirty",
+        "schema_version": "counterfactual-candidate-v4",
+        "source": "alpaca-iex",
+    }
+    evaluation = {
+        "status": "evaluated", "split_policy": "purged_walk_forward_no_random_split",
+        "all_promotion_gates_pass": True,
+    }
+
+    readiness = build_readiness(
+        store, dataset_manifest=manifest, model_evaluation=evaluation,
+        minimum_candidates=1, evidence_rows=rows,
+    )
+
+    assert readiness["promotion_ready"] is False
+    assert "dataset_code_sha_not_clean:abc-dirty" in readiness["blockers"]
