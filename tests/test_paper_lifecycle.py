@@ -48,8 +48,8 @@ def test_update_paper_positions_enters_and_closes_target(tmp_path):
     result = update_paper_positions(
         store,
         [
-            {"symbol": "AAPL", "timestamp": datetime.now(ET).isoformat(timespec="seconds"), "open": 100, "high": 101.5, "low": 100.5, "close": 101.2, "volume": 1000},
-            {"symbol": "AAPL", "timestamp": datetime.now(ET).isoformat(timespec="seconds"), "open": 101.2, "high": 103.5, "low": 101.1, "close": 103.1, "volume": 1000},
+            {"symbol": "AAPL", "timestamp": (datetime.now(ET) + timedelta(seconds=1)).isoformat(timespec="seconds"), "open": 100, "high": 101.5, "low": 100.5, "close": 101.2, "volume": 1000},
+            {"symbol": "AAPL", "timestamp": (datetime.now(ET) + timedelta(seconds=2)).isoformat(timespec="seconds"), "open": 101.2, "high": 103.5, "low": 101.1, "close": 103.1, "volume": 1000},
         ],
     )
 
@@ -89,7 +89,7 @@ def test_update_paper_positions_stop_wins_same_bar_for_conservative_fill(tmp_pat
     update_paper_positions(
         store,
         [
-            {"symbol": "AAPL", "timestamp": datetime.now(ET).isoformat(timespec="seconds"), "open": 101, "high": 104, "low": 99, "close": 102, "volume": 1000},
+            {"symbol": "AAPL", "timestamp": (datetime.now(ET) + timedelta(seconds=1)).isoformat(timespec="seconds"), "open": 101, "high": 104, "low": 99, "close": 102, "volume": 1000},
         ],
     )
 
@@ -121,7 +121,7 @@ def test_update_paper_positions_models_gap_slippage_and_round_trip_fees(tmp_path
         position_size=10,
         risk_dollars=10,
     )
-    now = datetime.now(ET)
+    now = datetime.now(ET) + timedelta(seconds=1)
 
     update_paper_positions(
         store,
@@ -154,7 +154,7 @@ def test_update_paper_positions_reports_gap_stop_against_planned_risk_dollars(tm
         proposal_id=proposal_id, ticker="AAPL", strategy_id="orb", direction="long",
         entry=101, stop=100, target=103, position_size=10, risk_dollars=10,
     )
-    now = datetime.now(ET)
+    now = datetime.now(ET) + timedelta(seconds=1)
 
     update_paper_positions(
         store,
@@ -179,7 +179,7 @@ def test_update_paper_positions_does_not_use_pre_entry_open_as_stop_fill(tmp_pat
         proposal_id=proposal_id, ticker="AAPL", strategy_id="orb", direction="long",
         entry=101, stop=100, target=103, position_size=1, risk_dollars=1,
     )
-    now = datetime.now(ET)
+    now = datetime.now(ET) + timedelta(seconds=1)
 
     update_paper_positions(
         store,
@@ -202,7 +202,7 @@ def test_update_paper_positions_does_not_reprocess_entry_bar_on_later_tick(tmp_p
         proposal_id=proposal_id, ticker="AAPL", strategy_id="orb", direction="long",
         entry=101, stop=100, target=103, position_size=1, risk_dollars=1,
     )
-    now = datetime.now(ET)
+    now = datetime.now(ET) + timedelta(seconds=1)
     timestamp = now.isoformat(timespec="seconds")
 
     update_paper_positions(
@@ -228,7 +228,7 @@ def test_update_paper_positions_does_not_flatten_position_twice_after_intrabar_c
         proposal_id=proposal_id, ticker="AAPL", strategy_id="orb", direction="long",
         entry=101, stop=100, target=103, position_size=1, risk_dollars=1,
     )
-    now = datetime.now(ET).replace(hour=15, minute=50, second=0, microsecond=0)
+    now = (datetime.now(ET) + timedelta(seconds=1)).replace(hour=15, minute=50, second=0, microsecond=0)
 
     result = update_paper_positions(
         store,
@@ -302,7 +302,7 @@ def test_update_paper_positions_flattens_open_positions_at_end_of_day(tmp_path):
         risk_dollars=10,
         status="open",
     )
-    now = datetime.now(ET)
+    now = datetime.now(ET) + timedelta(seconds=1)
     result = update_paper_positions(
         store,
         [{"symbol": "AAPL", "timestamp": now.isoformat(timespec="seconds"), "open": 101, "high": 101.5, "low": 100.8, "close": 101.25, "volume": 1000}],
@@ -340,7 +340,7 @@ def test_update_paper_positions_expires_pending_entries_after_no_new_trade_cutof
         position_size=10,
         risk_dollars=10,
     )
-    now = datetime.now(ET).replace(hour=11, minute=45, second=0, microsecond=0)
+    now = (datetime.now(ET) + timedelta(seconds=1)).replace(hour=11, minute=45, second=0, microsecond=0)
     result = update_paper_positions(
         store,
         [{"symbol": "AAPL", "timestamp": (now - timedelta(minutes=1)).isoformat(timespec="seconds"), "open": 100, "high": 100.5, "low": 99.8, "close": 100.1, "volume": 1000}],

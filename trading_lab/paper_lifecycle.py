@@ -5,7 +5,7 @@ from datetime import datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from trading_lab.fill_engine import apply_slippage, entry_fill_price, exit_fill, round_trip_fees
+from trading_lab.fill_engine import apply_slippage, round_trip_fees, simulate_position
 from trading_lab.journal_store import JournalStore
 
 ET = ZoneInfo("America/New_York")
@@ -59,69 +59,50 @@ def update_paper_positions(
             store.expire_position(position_id, closed_at=now.isoformat(timespec="seconds"), reason="no_new_entries_after_cutoff")
             events.append({"type": "expired_cutoff", "position_id": position_id, "ticker": pos["ticker"]})
             continue
-        for bar in symbol_bars:
-            ts = str(bar["timestamp"])
-            bar_dt = _parse_dt(ts)
-            if created_at is not None and bar_dt is not None and bar_dt < created_at:
-                continue
-            if entered_at is not None and bar_dt is not None and bar_dt <= entered_at:
-                continue
-            entered_this_bar = False
-            if status == "pending_entry":
-                fill_price = entry_fill_price(
-                    planned_entry=entry,
-                    direction=direction,
-                    bar=bar,
-                    slippage_bps=entry_slippage_bps,
-                )
-                if fill_price is None:
-                    continue
-                entry = fill_price
-                entered_this_bar = True
-                store.mark_position_open(position_id, entered_at=ts, entry_price=entry)
-                status = "open"
-                events.append({"type": "entered", "position_id": position_id, "ticker": pos["ticker"], "price": round(entry, 4), "timestamp": ts})
-
-            if status == "open":
-                resolved_exit = exit_fill(
-                    stop=stop,
-                    target=target,
-                    direction=direction,
-                    bar=bar,
-                    slippage_bps=exit_slippage_bps,
-                    allow_open_gap=not entered_this_bar,
-                )
-                if resolved_exit is not None:
-                    exit_reason, exit_price = resolved_exit
-                    fees = round_trip_fees(float(pos["position_size"]), fee_per_share=fee_per_share)
-                    trade_id = store.close_position(
-                        position_id,
-                        closed_at=ts,
-                        exit_price=exit_price,
-                        exit_reason=exit_reason,
-                        fees=fees,
-                    )
-                    events.append({
-                        "type": "closed",
-                        "position_id": position_id,
-                        "trade_id": trade_id,
-                        "ticker": pos["ticker"],
-                        "price": exit_price,
-                        "reason": exit_reason,
-                        "timestamp": ts,
-                    })
-                    status = "closed"
-                    break
+        signal_at = str(pos.get("entered_at") or pos["created_at"])
+        candidate = {
+            "ticker": pos["ticker"], "direction": direction, "planned_entry": entry,
+            "stop": stop, "target": target, "risk_dollars": pos["risk_dollars"],
+            "market_context": {"signal_timestamp": signal_at},
+        }
+        outcome = simulate_position(
+            candidate,
+            symbol_bars,
+            position_size=float(pos["position_size"]),
+            entry_slippage_bps=entry_slippage_bps if status == "pending_entry" else 0.0,
+            exit_slippage_bps=exit_slippage_bps,
+            fee_per_share=fee_per_share,
+            flatten_unresolved=False,
+            initial_entry=entry if status == "open" else None,
+            initial_entered_at=str(pos.get("entered_at") or pos["created_at"]) if status == "open" else None,
+        )
+        if status == "pending_entry" and outcome["fill_status"] == "filled":
+            entry = float(outcome["actual_entry"])
+            entered_at = str(outcome["entered_at"])
+            store.mark_position_open(position_id, entered_at=entered_at, entry_price=entry)
+            status = "open"
+            events.append({"type": "entered", "position_id": position_id, "ticker": pos["ticker"], "price": entry, "timestamp": entered_at})
+        if status == "open" and outcome["status"] == "closed":
+            trade_id = store.close_position(
+                position_id,
+                closed_at=str(outcome["closed_at"]),
+                exit_price=float(outcome["actual_exit"]),
+                exit_reason=str(outcome["exit_reason"]),
+                fees=float(outcome["fees"]),
+            )
+            events.append({
+                "type": "closed", "position_id": position_id, "trade_id": trade_id,
+                "ticker": pos["ticker"], "price": outcome["actual_exit"],
+                "reason": outcome["exit_reason"], "timestamp": outcome["closed_at"],
+            })
+            status = "closed"
 
         if status == "pending_entry" and created_at is not None and (now - created_at).total_seconds() >= expire_after_minutes * 60:
             store.expire_position(position_id, closed_at=now.isoformat(timespec="seconds"), reason="expired_without_entry")
             events.append({"type": "expired", "position_id": position_id, "ticker": pos["ticker"]})
         elif status == "open" and flatten_time is not None and now.time() >= flatten_time:
-            last_bar = symbol_bars[-1]
             flatten_price = apply_slippage(
-                float(last_bar["close"]),
-                direction=direction,
-                kind="exit",
+                float(symbol_bars[-1]["close"]), direction=direction, kind="exit",
                 bps=exit_slippage_bps,
             )
             trade_id = store.close_position(
