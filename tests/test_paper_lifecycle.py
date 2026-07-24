@@ -135,6 +135,32 @@ def test_update_paper_positions_models_gap_slippage_and_round_trip_fees(tmp_path
     assert trade["actual_exit"] == 102.897
     assert trade["fees"] == 0.1
     assert trade["pnl"] == 7.85
+    assert trade["actual_r_multiple"] == 0.785
+
+
+def test_update_paper_positions_reports_gap_stop_against_planned_risk_dollars(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    proposal_id = store.log_proposal(
+        ticker="AAPL", strategy_id="orb", direction="long", trigger="breakout",
+        planned_entry=101, stop=100, target=103, thesis="test",
+    )
+    store.create_paper_position(
+        proposal_id=proposal_id, ticker="AAPL", strategy_id="orb", direction="long",
+        entry=101, stop=100, target=103, position_size=10, risk_dollars=10,
+    )
+    now = datetime.now(ET)
+
+    update_paper_positions(
+        store,
+        [
+            {"symbol": "AAPL", "timestamp": now.isoformat(timespec="seconds"), "open": 102, "high": 102.5, "low": 101.5, "close": 102, "volume": 1000},
+            {"symbol": "AAPL", "timestamp": (now + timedelta(minutes=1)).isoformat(timespec="seconds"), "open": 101, "high": 101.2, "low": 99.5, "close": 100, "volume": 1000},
+        ],
+    )
+
+    trade = store.list_paper_trades()[0]
+    assert trade["pnl"] == -20.0
+    assert trade["actual_r_multiple"] == -2.0
 
 
 def test_update_paper_positions_does_not_use_pre_entry_open_as_stop_fill(tmp_path):
@@ -158,6 +184,32 @@ def test_update_paper_positions_does_not_use_pre_entry_open_as_stop_fill(tmp_pat
     assert trade["actual_entry"] == 101
     assert trade["actual_exit"] == 100
     assert trade["actual_r_multiple"] == -1.0
+
+
+def test_update_paper_positions_does_not_reprocess_entry_bar_on_later_tick(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    proposal_id = store.log_proposal(
+        ticker="AAPL", strategy_id="orb", direction="long", trigger="breakout",
+        planned_entry=101, stop=100, target=103, thesis="test",
+    )
+    store.create_paper_position(
+        proposal_id=proposal_id, ticker="AAPL", strategy_id="orb", direction="long",
+        entry=101, stop=100, target=103, position_size=1, risk_dollars=1,
+    )
+    now = datetime.now(ET)
+    timestamp = now.isoformat(timespec="seconds")
+
+    update_paper_positions(
+        store,
+        [{"symbol": "AAPL", "timestamp": timestamp, "open": 99, "high": 101.5, "low": 100.5, "close": 101.2, "volume": 1000}],
+    )
+    update_paper_positions(
+        store,
+        [{"symbol": "AAPL", "timestamp": timestamp, "open": 99, "high": 101.5, "low": 99, "close": 100, "volume": 1000}],
+    )
+
+    assert store.list_paper_positions()[0]["status"] == "open"
+    assert store.list_paper_trades() == []
 
 
 def test_update_paper_positions_does_not_flatten_position_twice_after_intrabar_close(tmp_path):

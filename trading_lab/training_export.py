@@ -155,9 +155,15 @@ def _outcome(row: sqlite3.Row) -> dict[str, Any]:
 def _label(*, position_status: str | None, exit_reason: str | None, r_multiple: float | None, closed: bool) -> str:
     if not closed:
         return position_status or "proposal_only"
-    if exit_reason == "target" or (r_multiple is not None and float(r_multiple) > 0):
+    if r_multiple is not None:
+        if float(r_multiple) > 0:
+            return "win"
+        if float(r_multiple) < 0:
+            return "loss"
+        return "scratch"
+    if exit_reason == "target":
         return "win"
-    if exit_reason == "stop" or (r_multiple is not None and float(r_multiple) < 0):
+    if exit_reason == "stop":
         return "loss"
     if exit_reason:
         return str(exit_reason)

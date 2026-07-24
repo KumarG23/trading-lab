@@ -1,7 +1,7 @@
 import json
 
 from trading_lab.journal_store import JournalStore
-from trading_lab.training_export import export_training_examples
+from trading_lab.training_export import _label, export_training_examples
 
 
 def test_export_training_examples_writes_compact_proposal_outcomes(tmp_path):
@@ -83,3 +83,7 @@ def test_export_training_examples_can_exclude_unclosed_rows(tmp_path):
 
     assert result["examples"] == 0
     assert output.read_text(encoding="utf-8") == ""
+
+
+def test_training_label_uses_net_r_before_target_exit_reason():
+    assert _label(position_status="closed", exit_reason="target", r_multiple=-0.1, closed=True) == "loss"

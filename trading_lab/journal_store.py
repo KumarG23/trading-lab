@@ -327,14 +327,13 @@ class JournalStore:
             pos = dict(row)
             direction = pos["direction"]
             entry = float(pos["entry"])
-            stop = float(pos["stop"])
             size = float(pos["position_size"])
-            risk_per_share = abs(entry - stop)
             if direction == "long":
                 pnl = (exit_price - entry) * size - fees
             else:
                 pnl = (entry - exit_price) * size - fees
-            r_multiple = pnl / (risk_per_share * size) if risk_per_share and size else 0.0
+            planned_risk_dollars = float(pos["risk_dollars"])
+            r_multiple = pnl / planned_risk_dollars if planned_risk_dollars else 0.0
             conn.execute(
                 """
                 UPDATE paper_positions

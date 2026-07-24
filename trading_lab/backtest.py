@@ -169,8 +169,8 @@ def _simulate_candidate(
             fees = round_trip_fees(position_size, fee_per_share=fee_per_share)
             gross_pnl = (exit_price - entry) * position_size if direction == "long" else (entry - exit_price) * position_size
             pnl = gross_pnl - fees
-            risk_per_share = abs(entry - stop)
-            actual_r = pnl / (risk_per_share * position_size) if risk_per_share and position_size else 0.0
+            planned_risk_dollars = float(candidate["risk_dollars"])
+            actual_r = pnl / planned_risk_dollars if planned_risk_dollars else 0.0
             return {
                 "ticker": symbol,
                 "strategy_id": candidate["strategy_id"],

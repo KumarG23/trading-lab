@@ -59,7 +59,7 @@ def update_paper_positions(
             bar_dt = _parse_dt(ts)
             if created_at is not None and bar_dt is not None and bar_dt < created_at:
                 continue
-            if entered_at is not None and bar_dt is not None and bar_dt < entered_at:
+            if entered_at is not None and bar_dt is not None and bar_dt <= entered_at:
                 continue
             entered_this_bar = False
             if status == "pending_entry":

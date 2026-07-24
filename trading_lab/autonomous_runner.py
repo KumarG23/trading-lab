@@ -107,7 +107,7 @@ class AutonomousRunner:
             else:
                 review_attempts += 1
                 try:
-                    review = self.worker.review(candidate)
+                    review = dict(self.worker.review(candidate))
                     review["shadow_status"] = "reviewed"
                 except Exception as exc:
                     review = {
