@@ -43,7 +43,10 @@ def main() -> int:
     parser.add_argument("--max-reviews-per-run", type=int, default=50, help="Research-candidate runaway cap per tick")
     parser.add_argument("--max-active-positions", type=int, default=2, help="Cap portfolio-admitted positions; research-only positions continue to be tracked")
     parser.add_argument("--max-trades-per-day", type=int, default=50, help="Research close/proposal runaway cap per day")
-    parser.add_argument("--training-output", type=Path, default=ROOT / "training" / "proposal_outcomes.jsonl", help="Derived JSONL proposal/outcome examples for later evals/tuning")
+    parser.add_argument("--entry-slippage-bps", type=float, default=5.0)
+    parser.add_argument("--exit-slippage-bps", type=float, default=10.0)
+    parser.add_argument("--fee-per-share", type=float, default=0.005)
+    parser.add_argument("--training-output", type=Path, default=ROOT / "training" / "proposal_outcomes.jsonl", help="Derived JSONL research-provenance export; not predictive-training evidence")
     parser.add_argument("--telemetry-output", type=Path, default=ROOT / "data" / "processed" / "last-paper-watch.json", help="Latest scan/decision latency telemetry")
     parser.add_argument("--no-training-export", action="store_true", help="Skip updating the derived training JSONL")
     parser.add_argument("--ignore-market-hours", action="store_true")
@@ -79,6 +82,9 @@ def main() -> int:
         bars,
         no_new_entries_after=NO_NEW_ENTRIES_AFTER,
         flatten_at="15:45",
+        entry_slippage_bps=args.entry_slippage_bps,
+        exit_slippage_bps=args.exit_slippage_bps,
+        fee_per_share=args.fee_per_share,
     )
     lifecycle_finished = perf_counter()
     risk_dollars = args.risk_dollars if args.risk_dollars is not None else round(cfg.account_equity * 0.01, 2)
@@ -140,6 +146,11 @@ def main() -> int:
         "max_reviews_per_run": args.max_reviews_per_run,
         "max_active_positions": args.max_active_positions,
         "max_trades_per_day": args.max_trades_per_day,
+        "fill_costs": {
+            "entry_slippage_bps": args.entry_slippage_bps,
+            "exit_slippage_bps": args.exit_slippage_bps,
+            "fee_per_share": args.fee_per_share,
+        },
         "logged_proposal_ids": proposal_ids,
         "lifecycle": lifecycle,
         "training_export": training_export,

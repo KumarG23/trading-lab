@@ -63,9 +63,9 @@ Promotion requires logged evidence and Neal's explicit approval. Prompt confiden
 - Use local Qwen/Qwen3.6 or the current local reviewer for private reviews.
 - Use Codex for code and deterministic calculations.
 - Avoid uploading raw private logs to paid/cloud models unless explicitly approved.
-- The SQLite journal is canonical. `training/proposal_outcomes.jsonl` is a regenerated derived dataset for future evals/tuning.
+- The SQLite journal is canonical. `training/proposal_outcomes.jsonl` is regenerated research provenance, not predictive-training evidence or an SFT-ready corpus.
 - Capture compact proposal/outcome examples, not giant prompt transcripts: strategy, structured proposal, rule checklist, model thesis/objection, lifecycle outcome, R/PnL, adherence, and mistake category.
-- Fine-tuning comes after enough clean labeled outcomes plus held-out evals. Thousands of trades can support LoRA/SFT, but only if labels are high-quality and representative; raw volume of mediocre setups is just overfit goblin feed.
+- Single-trade win/loss labels must never authorize predictive SFT. Trading models require counterfactually resolved candidates, realistic costs, point-in-time features, and held-out walk-forward evaluation; LLM tuning remains limited to formatting/postmortem tasks with separate evals.
 
 ## Future Robinhood MCP phase
 

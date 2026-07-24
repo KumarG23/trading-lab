@@ -6,14 +6,15 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA_VERSION = "trading-lab-proposal-outcome-v1"
+SCHEMA_VERSION = "trading-lab-proposal-outcome-v2"
 
 
 def export_training_examples(db_path: str | Path, output_path: str | Path, *, include_unclosed: bool = True) -> dict[str, Any]:
-    """Export compact proposal/outcome examples for future evals and tuning.
+    """Export compact proposal/outcome research provenance.
 
     This is deliberately a derived artifact. The SQLite journal remains canonical;
     this JSONL can be regenerated after quarantines, metric fixes, or schema tweaks.
+    Single-trade outcomes are not predictive-fitness labels or SFT approval.
     """
     db_path = Path(db_path)
     output_path = Path(output_path)
@@ -102,7 +103,9 @@ def _example(row: sqlite3.Row) -> dict[str, Any]:
         "schema_version": SCHEMA_VERSION,
         "example_id": f"proposal-{row['proposal_id']}",
         "label": outcome["label"],
-        "usable_for_sft": bool(outcome["closed"] and row["rule_adherent"] and row["proposal_status"] == "proposed"),
+        "artifact_purpose": "research_provenance",
+        "usable_for_sft": False,
+        "usable_for_predictive_training": False,
         "proposal": {
             "ticker": row["ticker"],
             "strategy_id": row["strategy_id"],

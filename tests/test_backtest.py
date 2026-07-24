@@ -35,8 +35,8 @@ def test_run_strategy_backtest_replays_candidates_to_closed_trades_with_metrics(
 
     assert result["proposals"] == 1
     assert result["trades"] == 1
-    assert result["metrics"]["total_r"] == 2.0
-    assert result["metrics"]["expectancy_r"] == 2.0
+    assert result["metrics"]["total_r"] == 0.0
+    assert result["metrics"]["expectancy_r"] == 0.0
     assert result["metrics"]["by_strategy"]["opening-range-breakout"]["trade_count"] == 1
 
 
@@ -60,11 +60,14 @@ def test_run_strategy_backtest_applies_slippage_to_entries_and_exits():
         risk_dollars=2.0,
         entry_slippage_bps=10,
         exit_slippage_bps=10,
+        fee_per_share=0.005,
     )
 
     assert slipped["metrics"]["total_r"] < clean["metrics"]["total_r"]
     assert slipped["slippage"]["entry_bps"] == 10
     assert slipped["slippage"]["exit_bps"] == 10
+    assert slipped["costs"]["fee_per_share"] == 0.005
+    assert slipped["trade_rows"][0]["fees"] > 0
 
 
 def test_run_strategy_backtest_resets_intraday_state_for_each_session():
@@ -115,7 +118,8 @@ def test_backtest_does_not_use_signal_bars_earlier_low_after_close_entry():
     )
 
     assert result["trades"] == 1
-    assert result["metrics"]["total_r"] == 2.0
+    assert result["metrics"]["total_r"] == 0.0
+    assert result["trade_rows"][0]["entered_at"].endswith("13:36:00Z")
 
 
 def test_backtest_can_apply_bullish_market_regime_filter():

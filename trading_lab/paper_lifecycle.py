@@ -5,6 +5,7 @@ from datetime import datetime, time
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from trading_lab.fill_engine import apply_slippage, entry_fill_price, exit_fill, round_trip_fees
 from trading_lab.journal_store import JournalStore
 
 ET = ZoneInfo("America/New_York")
@@ -18,6 +19,9 @@ def update_paper_positions(
     now: datetime | None = None,
     no_new_entries_after: str | None = None,
     flatten_at: str | None = None,
+    entry_slippage_bps: float = 0.0,
+    exit_slippage_bps: float = 0.0,
+    fee_per_share: float = 0.0,
 ) -> dict[str, Any]:
     """Advance simulated paper positions using OHLCV bars.
 
@@ -57,37 +61,41 @@ def update_paper_positions(
                 continue
             if entered_at is not None and bar_dt is not None and bar_dt < entered_at:
                 continue
-            high = float(bar["high"])
-            low = float(bar["low"])
-            close = float(bar["close"])
-
+            entered_this_bar = False
             if status == "pending_entry":
-                entered = (direction == "long" and high >= entry) or (direction == "short" and low <= entry)
-                if not entered:
+                fill_price = entry_fill_price(
+                    planned_entry=entry,
+                    direction=direction,
+                    bar=bar,
+                    slippage_bps=entry_slippage_bps,
+                )
+                if fill_price is None:
                     continue
-                store.mark_position_open(position_id, entered_at=ts)
+                entry = fill_price
+                entered_this_bar = True
+                store.mark_position_open(position_id, entered_at=ts, entry_price=entry)
                 status = "open"
-                events.append({"type": "entered", "position_id": position_id, "ticker": pos["ticker"], "price": entry, "timestamp": ts})
+                events.append({"type": "entered", "position_id": position_id, "ticker": pos["ticker"], "price": round(entry, 4), "timestamp": ts})
 
             if status == "open":
-                exit_reason = None
-                exit_price = None
-                if direction == "long":
-                    if low <= stop:
-                        exit_reason = "stop"
-                        exit_price = stop
-                    elif high >= target:
-                        exit_reason = "target"
-                        exit_price = target
-                else:
-                    if high >= stop:
-                        exit_reason = "stop"
-                        exit_price = stop
-                    elif low <= target:
-                        exit_reason = "target"
-                        exit_price = target
-                if exit_reason and exit_price is not None:
-                    trade_id = store.close_position(position_id, closed_at=ts, exit_price=exit_price, exit_reason=exit_reason)
+                resolved_exit = exit_fill(
+                    stop=stop,
+                    target=target,
+                    direction=direction,
+                    bar=bar,
+                    slippage_bps=exit_slippage_bps,
+                    allow_open_gap=not entered_this_bar,
+                )
+                if resolved_exit is not None:
+                    exit_reason, exit_price = resolved_exit
+                    fees = round_trip_fees(float(pos["position_size"]), fee_per_share=fee_per_share)
+                    trade_id = store.close_position(
+                        position_id,
+                        closed_at=ts,
+                        exit_price=exit_price,
+                        exit_reason=exit_reason,
+                        fees=fees,
+                    )
                     events.append({
                         "type": "closed",
                         "position_id": position_id,
@@ -97,6 +105,7 @@ def update_paper_positions(
                         "reason": exit_reason,
                         "timestamp": ts,
                     })
+                    status = "closed"
                     break
 
         if status == "pending_entry" and created_at is not None and (now - created_at).total_seconds() >= expire_after_minutes * 60:
@@ -104,18 +113,25 @@ def update_paper_positions(
             events.append({"type": "expired", "position_id": position_id, "ticker": pos["ticker"]})
         elif status == "open" and flatten_time is not None and now.time() >= flatten_time:
             last_bar = symbol_bars[-1]
+            flatten_price = apply_slippage(
+                float(last_bar["close"]),
+                direction=direction,
+                kind="exit",
+                bps=exit_slippage_bps,
+            )
             trade_id = store.close_position(
                 position_id,
                 closed_at=now.isoformat(timespec="seconds"),
-                exit_price=float(last_bar["close"]),
+                exit_price=flatten_price,
                 exit_reason="eod_flatten",
+                fees=round_trip_fees(float(pos["position_size"]), fee_per_share=fee_per_share),
             )
             events.append({
                 "type": "flattened_eod",
                 "position_id": position_id,
                 "trade_id": trade_id,
                 "ticker": pos["ticker"],
-                "price": float(last_bar["close"]),
+                "price": round(flatten_price, 4),
             })
 
     return {"events": events, "event_count": len(events), "active_positions": len(store.list_active_paper_positions())}

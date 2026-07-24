@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS paper_trades (
     position_size REAL,
     pnl REAL,
     actual_r_multiple REAL,
+    fees REAL NOT NULL DEFAULT 0.0,
     rule_adherent INTEGER NOT NULL CHECK(rule_adherent IN (0, 1)),
     mistake_category TEXT,
     exit_reason TEXT,
@@ -66,7 +67,8 @@ CREATE TABLE IF NOT EXISTS paper_positions (
     exit_price REAL,
     exit_reason TEXT,
     pnl REAL,
-    r_multiple REAL
+    r_multiple REAL,
+    fees REAL NOT NULL DEFAULT 0.0
 );
 
 CREATE TABLE IF NOT EXISTS reviews (
@@ -109,6 +111,14 @@ def init_db(path: str | Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(path) as conn:
         conn.executescript(SCHEMA)
+        _ensure_column(conn, "paper_trades", "fees", "REAL NOT NULL DEFAULT 0.0")
+        _ensure_column(conn, "paper_positions", "fees", "REAL NOT NULL DEFAULT 0.0")
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 class JournalStore:
@@ -205,6 +215,7 @@ class JournalStore:
         pnl: float | None,
         actual_r_multiple: float | None,
         rule_adherent: bool,
+        fees: float = 0.0,
         mistake_category: str | None = None,
         exit_reason: str | None = None,
         postmortem: str | None = None,
@@ -214,12 +225,12 @@ class JournalStore:
                 """
                 INSERT INTO paper_trades (
                     proposal_id, created_at, actual_entry, actual_exit, position_size,
-                    pnl, actual_r_multiple, rule_adherent, mistake_category, exit_reason, postmortem
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    pnl, actual_r_multiple, fees, rule_adherent, mistake_category, exit_reason, postmortem
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     proposal_id, now_et(), actual_entry, actual_exit, position_size,
-                    pnl, actual_r_multiple, int(rule_adherent), mistake_category, exit_reason, postmortem,
+                    pnl, actual_r_multiple, fees, int(rule_adherent), mistake_category, exit_reason, postmortem,
                 ),
             )
             return int(cur.lastrowid)
@@ -307,6 +318,7 @@ class JournalStore:
         exit_price: float,
         exit_reason: str,
         rule_adherent: bool = True,
+        fees: float = 0.0,
     ) -> int:
         with self._conn() as conn:
             row = conn.execute("SELECT * FROM paper_positions WHERE id = ?", (position_id,)).fetchone()
@@ -319,28 +331,28 @@ class JournalStore:
             size = float(pos["position_size"])
             risk_per_share = abs(entry - stop)
             if direction == "long":
-                pnl = (exit_price - entry) * size
+                pnl = (exit_price - entry) * size - fees
             else:
-                pnl = (entry - exit_price) * size
+                pnl = (entry - exit_price) * size - fees
             r_multiple = pnl / (risk_per_share * size) if risk_per_share and size else 0.0
             conn.execute(
                 """
                 UPDATE paper_positions
-                SET status = 'closed', closed_at = ?, exit_price = ?, exit_reason = ?, pnl = ?, r_multiple = ?
+                SET status = 'closed', closed_at = ?, exit_price = ?, exit_reason = ?, pnl = ?, r_multiple = ?, fees = ?
                 WHERE id = ?
                 """,
-                (closed_at, exit_price, exit_reason, round(pnl, 4), round(r_multiple, 4), position_id),
+                (closed_at, exit_price, exit_reason, round(pnl, 4), round(r_multiple, 4), round(fees, 4), position_id),
             )
             cur = conn.execute(
                 """
                 INSERT INTO paper_trades (
                     proposal_id, created_at, actual_entry, actual_exit, position_size,
-                    pnl, actual_r_multiple, rule_adherent, mistake_category, exit_reason, postmortem
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    pnl, actual_r_multiple, fees, rule_adherent, mistake_category, exit_reason, postmortem
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     pos["proposal_id"], now_et(), entry, exit_price, size, round(pnl, 4),
-                    round(r_multiple, 4), int(rule_adherent), None, exit_reason,
+                    round(r_multiple, 4), round(fees, 4), int(rule_adherent), None, exit_reason,
                     f"simulated paper close via {exit_reason}",
                 ),
             )

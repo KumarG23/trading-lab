@@ -27,6 +27,7 @@ def main() -> int:
     parser.add_argument("--risk-dollars", type=float, default=None)
     parser.add_argument("--entry-slippage-bps", type=float, default=5.0)
     parser.add_argument("--exit-slippage-bps", type=float, default=10.0)
+    parser.add_argument("--fee-per-share", type=float, default=0.005)
     parser.add_argument("--bullish-regime-filter", action="store_true", help="Require SPY above a rising intraday VWAP for long candidates")
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
@@ -59,6 +60,7 @@ def main() -> int:
         risk_dollars=args.risk_dollars if args.risk_dollars is not None else round(cfg.account_equity * 0.01, 2),
         entry_slippage_bps=args.entry_slippage_bps,
         exit_slippage_bps=args.exit_slippage_bps,
+        fee_per_share=args.fee_per_share,
         require_bullish_market_regime=args.bullish_regime_filter,
     )
     result.update({

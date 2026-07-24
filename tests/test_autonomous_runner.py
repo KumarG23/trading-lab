@@ -16,6 +16,21 @@ class FakeWorker:
         }
 
 
+class RejectingWorker:
+    def review(self, proposal):
+        return {
+            "approved": False,
+            "thesis": "shadow model dislikes this setup",
+            "risk_officer_objection": "weak context",
+            "model_used": "fake-local",
+        }
+
+
+class ExplodingWorker:
+    def review(self, proposal):
+        raise RuntimeError("model server unavailable")
+
+
 def _good_candidate(ticker="AAPL"):
     return {
         "ticker": ticker,
@@ -75,16 +90,48 @@ def test_autonomous_runner_suppresses_duplicate_proposals(tmp_path):
     assert len(store.list_paper_positions()) == 1
 
 
-def test_autonomous_runner_caps_model_reviews_per_run(tmp_path):
+def test_autonomous_runner_records_and_simulates_candidate_when_shadow_model_rejects(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    runner = AutonomousRunner(store=store, worker=RejectingWorker(), account_equity=1000)
+
+    ids = runner.process_candidates([_good_candidate()])
+
+    proposal = store.list_proposals()[0]
+    assert ids == [proposal["id"]]
+    assert len(store.list_paper_positions()) == 1
+    assert proposal["thesis"] == ""
+    assert proposal["rule_checklist"]["local_worker_shadow_approved"] is False
+    assert proposal["rule_checklist"]["local_worker_shadow_thesis"] == "shadow model dislikes this setup"
+    assert proposal["risk_officer_objection"] == "weak context"
+
+
+def test_autonomous_runner_keeps_capture_running_when_shadow_model_is_unavailable(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    runner = AutonomousRunner(store=store, worker=ExplodingWorker(), account_equity=1000)
+
+    ids = runner.process_candidates([_good_candidate()])
+
+    proposal = store.list_proposals()[0]
+    assert ids == [proposal["id"]]
+    assert len(store.list_paper_positions()) == 1
+    assert proposal["rule_checklist"]["local_worker_shadow_status"] == "error"
+    assert proposal["rule_checklist"]["local_worker_reviewed"] is False
+    assert "RuntimeError" in proposal["risk_officer_objection"]
+
+
+def test_autonomous_runner_caps_model_reviews_without_capping_candidate_capture(tmp_path):
     store = JournalStore(tmp_path / "lab.db")
     worker = FakeWorker()
     runner = AutonomousRunner(store=store, worker=worker, account_equity=1000, max_reviews_per_run=1, max_active_positions=None)
 
     ids = runner.process_candidates([_good_candidate("AAPL"), _good_candidate("MSFT")])
 
-    assert len(ids) == 1
+    proposals = store.list_proposals()
+    assert len(ids) == 2
     assert worker.reviewed == ["AAPL"]
-    assert [p["ticker"] for p in store.list_proposals()] == ["AAPL"]
+    assert [p["ticker"] for p in proposals] == ["AAPL", "MSFT"]
+    assert proposals[1]["rule_checklist"]["local_worker_reviewed"] is False
+    assert proposals[1]["rule_checklist"]["local_worker_shadow_status"] == "not_reviewed_cap"
 
 
 def test_autonomous_runner_tracks_all_research_candidates_but_caps_portfolio_admission(tmp_path):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from trading_lab.fill_engine import entry_fill_price, exit_fill, round_trip_fees
 from trading_lab.metrics import summarize_trades
 from trading_lab.policy_gate import PolicyGate
 from trading_lab.strategy_suite import generate_strategy_candidates
@@ -17,6 +18,7 @@ def run_strategy_backtest(
     opening_range_minutes: int = 5,
     entry_slippage_bps: float = 0.0,
     exit_slippage_bps: float = 0.0,
+    fee_per_share: float = 0.0,
     require_bullish_market_regime: bool = False,
 ) -> dict[str, Any]:
     """Replay strategy candidates against historical bars.
@@ -45,7 +47,14 @@ def run_strategy_backtest(
         if not decision.ok:
             rejected.append({"ticker": candidate.get("ticker"), "strategy_id": candidate.get("strategy_id"), "violations": decision.violations})
             continue
-        trade = _simulate_candidate(candidate, session_bars, position_size=float(decision.position_size or 0.0), entry_slippage_bps=entry_slippage_bps, exit_slippage_bps=exit_slippage_bps)
+        trade = _simulate_candidate(
+            candidate,
+            session_bars,
+            position_size=float(decision.position_size or 0.0),
+            entry_slippage_bps=entry_slippage_bps,
+            exit_slippage_bps=exit_slippage_bps,
+            fee_per_share=fee_per_share,
+        )
         if trade:
             trades.append(trade)
     return {
@@ -57,6 +66,7 @@ def run_strategy_backtest(
         "rejected": rejected,
         "trades": len(trades),
         "slippage": {"entry_bps": entry_slippage_bps, "exit_bps": exit_slippage_bps},
+        "costs": {"fee_per_share": fee_per_share},
         "require_bullish_market_regime": require_bullish_market_regime,
         "metrics": summarize_trades(trades),
         "trade_rows": trades,
@@ -114,6 +124,7 @@ def _simulate_candidate(
     position_size: float,
     entry_slippage_bps: float,
     exit_slippage_bps: float,
+    fee_per_share: float,
 ) -> dict[str, Any] | None:
     symbol = str(candidate["ticker"]).upper()
     direction = str(candidate["direction"])
@@ -121,7 +132,7 @@ def _simulate_candidate(
     planned_entry = float(candidate["planned_entry"])
     stop = float(candidate["stop"])
     target = float(candidate["target"])
-    entry = _apply_slippage(planned_entry, direction=direction, kind="entry", bps=entry_slippage_bps)
+    entry = planned_entry
     entered = False
     entered_at = None
     for bar in bars:
@@ -130,36 +141,34 @@ def _simulate_candidate(
         ts = str(bar["timestamp"])
         if signal_ts and ts <= signal_ts:
             continue
-        high = float(bar["high"])
-        low = float(bar["low"])
         close = float(bar["close"])
+        entered_this_bar = False
         if not entered:
-            if direction == "long" and high >= planned_entry:
-                entered = True
-                entered_at = ts
-            elif direction == "short" and low <= planned_entry:
-                entered = True
-                entered_at = ts
-            else:
+            fill_price = entry_fill_price(
+                planned_entry=planned_entry,
+                direction=direction,
+                bar=bar,
+                slippage_bps=entry_slippage_bps,
+            )
+            if fill_price is None:
                 continue
-        exit_reason = None
-        exit_price = None
-        if direction == "long":
-            if low <= stop:
-                exit_reason = "stop"
-                exit_price = _apply_slippage(stop, direction=direction, kind="exit", bps=exit_slippage_bps)
-            elif high >= target:
-                exit_reason = "target"
-                exit_price = _apply_slippage(target, direction=direction, kind="exit", bps=exit_slippage_bps)
-        else:
-            if high >= stop:
-                exit_reason = "stop"
-                exit_price = _apply_slippage(stop, direction=direction, kind="exit", bps=exit_slippage_bps)
-            elif low <= target:
-                exit_reason = "target"
-                exit_price = _apply_slippage(target, direction=direction, kind="exit", bps=exit_slippage_bps)
-        if exit_reason and exit_price is not None:
-            pnl = (exit_price - entry) * position_size if direction == "long" else (entry - exit_price) * position_size
+            entry = fill_price
+            entered = True
+            entered_this_bar = True
+            entered_at = ts
+        resolved_exit = exit_fill(
+            stop=stop,
+            target=target,
+            direction=direction,
+            bar=bar,
+            slippage_bps=exit_slippage_bps,
+            allow_open_gap=not entered_this_bar,
+        )
+        if resolved_exit is not None:
+            exit_reason, exit_price = resolved_exit
+            fees = round_trip_fees(position_size, fee_per_share=fee_per_share)
+            gross_pnl = (exit_price - entry) * position_size if direction == "long" else (entry - exit_price) * position_size
+            pnl = gross_pnl - fees
             risk_per_share = abs(entry - stop)
             actual_r = pnl / (risk_per_share * position_size) if risk_per_share and position_size else 0.0
             return {
@@ -173,18 +182,10 @@ def _simulate_candidate(
                 "actual_exit": round(exit_price, 4),
                 "position_size": round(position_size, 4),
                 "pnl": round(pnl, 4),
+                "fees": fees,
                 "actual_r_multiple": round(actual_r, 4),
                 "rule_adherent": True,
                 "exit_reason": exit_reason,
                 "close_at_bar": close,
             }
     return None
-
-
-def _apply_slippage(price: float, *, direction: str, kind: str, bps: float) -> float:
-    if bps <= 0:
-        return price
-    rate = bps / 10000.0
-    if kind == "entry":
-        return price * (1 + rate) if direction == "long" else price * (1 - rate)
-    return price * (1 - rate) if direction == "long" else price * (1 + rate)

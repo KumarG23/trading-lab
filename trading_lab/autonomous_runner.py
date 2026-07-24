@@ -97,11 +97,26 @@ class AutonomousRunner:
             ):
                 continue
             if self.max_reviews_per_run is not None and review_attempts >= self.max_reviews_per_run:
-                break
-            review_attempts += 1
-            review = self.worker.review(candidate)
-            if not review.get("approved", False):
-                continue
+                review = {
+                    "approved": False,
+                    "thesis": "",
+                    "risk_officer_objection": "",
+                    "model_used": "deterministic",
+                    "shadow_status": "not_reviewed_cap",
+                }
+            else:
+                review_attempts += 1
+                try:
+                    review = self.worker.review(candidate)
+                    review["shadow_status"] = "reviewed"
+                except Exception as exc:
+                    review = {
+                        "approved": False,
+                        "thesis": "",
+                        "risk_officer_objection": f"shadow review error: {type(exc).__name__}",
+                        "model_used": "deterministic",
+                        "shadow_status": "error",
+                    }
             checklist = dict(candidate.get("rule_checklist") or {})
             portfolio_decision = self.gate.validate(
                 candidate,
@@ -119,6 +134,9 @@ class AutonomousRunner:
                     "position_notional": decision.position_notional,
                     "stop_distance_pct": decision.stop_distance_pct,
                     "local_worker_reviewed": review.get("model_used") not in {None, "deterministic"},
+                    "local_worker_shadow_approved": bool(review.get("approved", False)),
+                    "local_worker_shadow_thesis": str(review.get("thesis") or ""),
+                    "local_worker_shadow_status": str(review.get("shadow_status") or "unknown"),
                     "portfolio_admitted": portfolio_admitted,
                 }
             )
@@ -130,7 +148,7 @@ class AutonomousRunner:
                 planned_entry=_float_or_none(candidate.get("planned_entry")),
                 stop=_float_or_none(candidate.get("stop")),
                 target=_float_or_none(candidate.get("target")),
-                thesis=str(review.get("thesis") or candidate.get("thesis") or ""),
+                thesis=str(candidate.get("thesis") or ""),
                 rule_checklist=checklist,
                 risk_officer_objection=str(review.get("risk_officer_objection") or ""),
                 model_used=str(review.get("model_used") or "unknown"),

@@ -56,9 +56,11 @@ def test_export_training_examples_writes_compact_proposal_outcomes(tmp_path):
 
     assert result["examples"] == 1
     assert result["labels"] == {"win": 1}
-    assert rows[0]["schema_version"] == "trading-lab-proposal-outcome-v1"
+    assert rows[0]["schema_version"] == "trading-lab-proposal-outcome-v2"
     assert rows[0]["example_id"] == f"proposal-{winner}"
-    assert rows[0]["usable_for_sft"] is True
+    assert rows[0]["artifact_purpose"] == "research_provenance"
+    assert rows[0]["usable_for_sft"] is False
+    assert rows[0]["usable_for_predictive_training"] is False
     assert rows[0]["proposal"]["ticker"] == "AAPL"
     assert rows[0]["outcome"]["r_multiple"] == 2.0
 
