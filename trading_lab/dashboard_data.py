@@ -8,6 +8,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from trading_lab.journal_store import JournalStore
+from trading_lab.lanes import is_portfolio_admitted
 from trading_lab.metrics import summarize_trades
 
 ET = ZoneInfo("America/New_York")
@@ -37,12 +38,12 @@ def build_dashboard_snapshot(
     portfolio_trades = [
         trade
         for trade in attributed_trades
-        if (proposals_by_id.get(int(trade["proposal_id"]), {}).get("rule_checklist") or {}).get("portfolio_admitted", True)
+        if is_portfolio_admitted(proposals_by_id.get(int(trade["proposal_id"])))
     ]
     active_portfolio_positions = [
         position
         for position in active_research_positions
-        if (proposals_by_id.get(int(position["proposal_id"]), {}).get("rule_checklist") or {}).get("portfolio_admitted", True)
+        if is_portfolio_admitted(proposals_by_id.get(int(position["proposal_id"])))
     ]
     research_metrics = summarize_trades(attributed_trades)
     portfolio_metrics = summarize_trades(portfolio_trades)

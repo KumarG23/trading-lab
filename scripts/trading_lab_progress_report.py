@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from trading_lab.daily_summary import format_daily_summary, max_drawdown_r  # noqa: E402
+from trading_lab.lanes import is_portfolio_admitted  # noqa: E402
 
 DB = ROOT / "journal" / "trading-lab.db"
 SCANNER = ROOT / "data" / "processed" / "scanner-watchlist.json"
@@ -61,16 +62,18 @@ def main() -> int:
     ]
     active = [p for p in positions if p["status"] in {"pending_entry", "open"}]
     proposal_portfolio_admission = {
-        int(proposal["id"]): json.loads(proposal["rule_checklist_json"] or "{}").get("portfolio_admitted", True)
+        int(proposal["id"]): is_portfolio_admitted(
+            {"rule_checklist": json.loads(proposal["rule_checklist_json"] or "{}")}
+        )
         for proposal in proposals
     }
-    active_portfolio = [p for p in active if proposal_portfolio_admission.get(int(p["proposal_id"]), True)]
+    active_portfolio = [p for p in active if proposal_portfolio_admission.get(int(p["proposal_id"]), False)]
     by_strategy = Counter(p["strategy_id"] for p in proposals)
     by_status = Counter(p["status"] for p in positions)
     scanner = _load_scanner()
     closed_today = [p for p in positions if p["closed_at"] and str(p["closed_at"]) >= session_start and p["status"] == "closed"]
     portfolio_closed_today = [
-        p for p in closed_today if proposal_portfolio_admission.get(int(p["proposal_id"]), True)
+        p for p in closed_today if proposal_portfolio_admission.get(int(p["proposal_id"]), False)
     ]
     total_r = sum(float(p["r_multiple"] or 0) for p in closed_today)
     total_pnl = sum(float(p["pnl"] or 0) for p in closed_today)

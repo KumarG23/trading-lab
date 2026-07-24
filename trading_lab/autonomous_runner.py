@@ -6,6 +6,7 @@ from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
 from trading_lab.journal_store import JournalStore
+from trading_lab.lanes import is_portfolio_admitted
 from trading_lab.policy_gate import PolicyGate
 
 ET = ZoneInfo("America/New_York")
@@ -171,8 +172,7 @@ class AutonomousRunner:
         count = 0
         for position in self.store.list_active_paper_positions():
             proposal = proposals.get(int(position["proposal_id"]), {})
-            checklist = proposal.get("rule_checklist") or {}
-            if checklist.get("portfolio_admitted", True):
+            if is_portfolio_admitted(proposal, unknown_counts_as_admitted=True):
                 count += 1
         return count
 
@@ -187,8 +187,7 @@ class AutonomousRunner:
         for trade in self.store.list_paper_trades():
             if portfolio_only:
                 proposal = proposals.get(int(trade["proposal_id"]), {})
-                checklist = proposal.get("rule_checklist") or {}
-                if not checklist.get("portfolio_admitted", True):
+                if not is_portfolio_admitted(proposal, unknown_counts_as_admitted=True):
                     continue
             try:
                 trade_date = datetime.fromisoformat(str(trade["created_at"])).astimezone(ET).date()

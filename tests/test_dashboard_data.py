@@ -13,7 +13,7 @@ def test_build_dashboard_snapshot_includes_safety_metrics_and_readiness(tmp_path
         stop=100,
         target=103,
         thesis="test",
-        rule_checklist={"policy_approved": True},
+        rule_checklist={"policy_approved": True, "portfolio_admitted": True},
     )
     store.create_paper_position(
         proposal_id=proposal_id,
@@ -73,8 +73,8 @@ def test_dashboard_metrics_attribute_closed_trades_to_proposal_strategy(tmp_path
 
     snapshot = build_dashboard_snapshot(store, account_equity=200, live_enabled=False)
 
-    assert snapshot["metrics"]["by_strategy"]["vwap-reclaim"]["trade_count"] == 1
-    assert "unknown" not in snapshot["metrics"]["by_strategy"]
+    assert snapshot["research_metrics"]["by_strategy"]["vwap-reclaim"]["trade_count"] == 1
+    assert "unknown" not in snapshot["research_metrics"]["by_strategy"]
 
 
 def test_dashboard_splits_research_metrics_from_portfolio_metrics(tmp_path):
@@ -114,6 +114,40 @@ def test_dashboard_splits_research_metrics_from_portfolio_metrics(tmp_path):
     assert snapshot["portfolio_metrics"]["trade_count"] == 1
     assert snapshot["portfolio_metrics"]["total_r"] == 2.0
     assert snapshot["metrics"] == snapshot["portfolio_metrics"]
+
+
+def test_dashboard_treats_legacy_rows_without_portfolio_marker_as_research_only(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    proposal_id = store.log_proposal(
+        ticker="QQQ",
+        strategy_id="vwap-reclaim",
+        direction="long",
+        trigger="legacy row",
+        planned_entry=100,
+        stop=99,
+        target=102,
+        thesis="predates lane split",
+        rule_checklist={},
+    )
+    position_id = store.create_paper_position(
+        proposal_id=proposal_id,
+        ticker="QQQ",
+        strategy_id="vwap-reclaim",
+        direction="long",
+        entry=100,
+        stop=99,
+        target=102,
+        position_size=1,
+        risk_dollars=1,
+        status="open",
+    )
+    store.close_position(position_id, closed_at="2026-07-20T10:00:00-04:00", exit_price=102, exit_reason="target")
+
+    snapshot = build_dashboard_snapshot(store, account_equity=200, live_enabled=False)
+
+    assert snapshot["research_metrics"]["trade_count"] == 1
+    assert snapshot["portfolio_metrics"]["trade_count"] == 0
+    assert snapshot["counts"]["portfolio_trades"] == 0
 
 
 def test_dashboard_snapshot_includes_latest_runtime_latency(tmp_path):
