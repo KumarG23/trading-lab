@@ -5,9 +5,11 @@ __pycache__/
 .env
 journal/*.db
 journal/*.db-*
+journal/backups/
 data/raw/
 data/processed/
 data/backtests/
+data/evidence/
 training/*.jsonl
 reports/*.html
 reports/*.json

@@ -84,8 +84,9 @@ class AlpacaClient:
         normalized_symbols = [symbol.upper() for symbol in symbols]
         bars: list[dict[str, Any]] = []
         for batch in _chunks(normalized_symbols, batch_size):
-            query = urlencode(
-                {
+            page_token: str | None = None
+            while True:
+                params = {
                     "symbols": ",".join(batch),
                     "timeframe": timeframe,
                     "start": start,
@@ -93,13 +94,18 @@ class AlpacaClient:
                     "feed": feed,
                     "limit": 10000,
                 }
-            )
-            payload = self.http.request_json(
-                "GET",
-                f"{data_url.rstrip('/')}/v2/stocks/bars?{query}",
-                headers=self._headers(),
-            )
-            bars.extend(_normalize_bars(payload.get("bars") or {}))
+                if page_token:
+                    params["page_token"] = page_token
+                query = urlencode(params)
+                payload = self.http.request_json(
+                    "GET",
+                    f"{data_url.rstrip('/')}/v2/stocks/bars?{query}",
+                    headers=self._headers(),
+                )
+                bars.extend(_normalize_bars(payload.get("bars") or {}))
+                page_token = payload.get("next_page_token")
+                if not page_token:
+                    break
         return sorted(bars, key=lambda item: (item["symbol"], item["timestamp"]))
 
     def _headers(self) -> dict[str, str]:
