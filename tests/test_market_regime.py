@@ -1,4 +1,4 @@
-from trading_lab.market_regime import bullish_market_regime
+from trading_lab.market_regime import bullish_market_regime, market_regime_label
 
 
 def _spy_bar(minute: int, close: float, volume: float = 1000) -> dict:
@@ -23,3 +23,4 @@ def test_bullish_market_regime_requires_spy_above_rising_vwap():
 
 def test_bullish_market_regime_does_not_block_when_spy_context_is_missing():
     assert bullish_market_regime([]) is True
+    assert market_regime_label([]) == "unknown"

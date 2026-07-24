@@ -127,3 +127,30 @@ def test_journal_store_excludes_quarantined_rows_from_default_lists(tmp_path):
     assert [t["proposal_id"] for t in store.list_paper_trades()] == [good_id]
     assert len(store.list_proposals(include_quarantined=True)) == 2
     assert len(store.list_paper_trades(include_quarantined=True)) == 2
+
+
+def test_candidate_outcome_round_trip_is_one_per_immutable_event(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    event_id = store.log_candidate_event(
+        {"ticker": "AAPL", "strategy_id": "orb", "direction": "long"},
+        disposition="duplicate",
+    )
+    outcome = {
+        "fill_status": "filled", "entered_at": "2026-07-20T13:36:00Z",
+        "closed_at": "2026-07-20T13:37:00Z", "actual_entry": 101.1,
+        "actual_exit": 102.9, "exit_reason": "target", "net_dollars": 1.7,
+        "net_r": 0.85, "fees": 0.1, "entry_slippage_dollars": 0.05,
+        "exit_slippage_dollars": 0.05, "mfe_dollars": 2.4, "mae_dollars": -0.6,
+        "mfe_r": 1.2, "mae_r": -0.3, "duration_seconds": 60,
+        "same_bar_ambiguity": False, "data_quality_flags": [],
+    }
+
+    outcome_id = store.log_candidate_outcome(event_id, outcome)
+    second_id = store.log_candidate_outcome(event_id, outcome)
+
+    assert second_id == outcome_id
+    assert store.list_unresolved_candidate_events() == []
+    stored = store.list_candidate_outcomes()[0]
+    assert stored["candidate_event_id"] == event_id
+    assert stored["net_dollars"] == 1.7
+    assert stored["data_quality_flags"] == []

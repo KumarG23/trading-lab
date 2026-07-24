@@ -35,6 +35,7 @@ def test_generate_strategy_candidates_combines_orb_and_vwap_when_enabled():
         "opening-range-breakout",
         "vwap-trend-imbalance",
     }
+    assert {candidate["market_context"]["regime"] for candidate in candidates} == {"unknown"}
 
 
 def test_generate_strategy_candidates_caps_risk_to_fit_small_account_notional_limit():

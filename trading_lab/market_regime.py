@@ -28,3 +28,10 @@ def bullish_market_regime(bars: list[dict[str, Any]], *, symbol: str = "SPY", sl
 
     latest_close = float(market_bars[-1]["close"])
     return latest_close > vwaps[-1] and vwaps[-1] > vwaps[-slope_lookback]
+
+
+def market_regime_label(bars: list[dict[str, Any]], *, symbol: str = "SPY", slope_lookback: int = 3) -> str:
+    market_bars = [bar for bar in bars if str(bar.get("symbol") or "").upper() == symbol.upper()]
+    if len(market_bars) < slope_lookback:
+        return "unknown"
+    return "bullish" if bullish_market_regime(bars, symbol=symbol, slope_lookback=slope_lookback) else "not_bullish"

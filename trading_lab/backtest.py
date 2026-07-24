@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from typing import Any
 
+from trading_lab.data_quality import validate_minute_bars
 from trading_lab.fill_engine import simulate_position
+from trading_lab.market_calendar import ET, XNYSCalendar, filter_research_session_bars
 from trading_lab.metrics import summarize_trades
 from trading_lab.policy_gate import PolicyGate
 from trading_lab.strategy_suite import generate_strategy_candidates
@@ -28,6 +31,18 @@ def run_strategy_backtest(
     a tick-accurate exchange simulator. It is the first sieve for killing bad
     ideas before they get broker-paper privileges.
     """
+    bars = filter_research_session_bars(bars)
+    data_quality = validate_minute_bars(bars)
+    if data_quality["fatal"]:
+        return {
+            "symbols": symbols, "strategies": enabled_strategies, "bars": len(bars),
+            "candidates": 0, "proposals": 0, "rejected": [], "trades": 0,
+            "slippage": {"entry_bps": entry_slippage_bps, "exit_bps": exit_slippage_bps},
+            "costs": {"fee_per_share": fee_per_share},
+            "require_bullish_market_regime": require_bullish_market_regime,
+            "metrics": summarize_trades([]), "trade_rows": [], "candidate_rows": [],
+            "data_quality": data_quality,
+        }
     ordered = sorted(bars, key=lambda item: (str(item["timestamp"]), str(item["symbol"]).upper()))
     candidate_sessions = _generate_replay_candidates(
         ordered,
@@ -42,15 +57,32 @@ def run_strategy_backtest(
     gate = PolicyGate(account_equity=account_equity)
     trades: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
+    candidate_rows: list[dict[str, Any]] = []
     for candidate, session_bars in candidate_sessions:
+        session_bars = _candidate_session_bars(candidate, session_bars)
         decision = gate.validate(candidate)
+        position_size = float(decision.position_size or _counterfactual_position_size(candidate))
+        outcome = simulate_position(
+            candidate,
+            session_bars,
+            position_size=position_size,
+            entry_slippage_bps=entry_slippage_bps,
+            exit_slippage_bps=exit_slippage_bps,
+            fee_per_share=fee_per_share,
+        )
+        candidate_rows.append({
+            "candidate": candidate,
+            "disposition": "policy_approved" if decision.ok else "policy_rejected",
+            "policy_violations": decision.violations,
+            "outcome": outcome,
+        })
         if not decision.ok:
             rejected.append({"ticker": candidate.get("ticker"), "strategy_id": candidate.get("strategy_id"), "violations": decision.violations})
             continue
         trade = _simulate_candidate(
             candidate,
             session_bars,
-            position_size=float(decision.position_size or 0.0),
+            position_size=position_size,
             entry_slippage_bps=entry_slippage_bps,
             exit_slippage_bps=exit_slippage_bps,
             fee_per_share=fee_per_share,
@@ -70,7 +102,29 @@ def run_strategy_backtest(
         "require_bullish_market_regime": require_bullish_market_regime,
         "metrics": summarize_trades(trades),
         "trade_rows": trades,
+        "candidate_rows": candidate_rows,
+        "data_quality": data_quality,
     }
+
+
+def _counterfactual_position_size(candidate: dict[str, Any]) -> float:
+    distance = abs(float(candidate["planned_entry"]) - float(candidate["stop"]))
+    return float(candidate.get("risk_dollars") or 0.0) / distance if distance else 0.0
+
+
+def _candidate_session_bars(candidate: dict[str, Any], bars: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    signal = datetime.fromisoformat(
+        str((candidate.get("market_context") or {}).get("signal_timestamp")).replace("Z", "+00:00")
+    )
+    session = signal.astimezone(ET).date()
+    _opening, closing = XNYSCalendar().session_bounds(session)
+    flatten = closing - timedelta(minutes=15)
+    symbol = str(candidate.get("ticker") or "").upper()
+    return [
+        bar for bar in bars
+        if str(bar.get("symbol") or "").upper() == symbol
+        and datetime.fromisoformat(str(bar["timestamp"]).replace("Z", "+00:00")).astimezone(ET) < flatten
+    ]
 
 
 def _generate_replay_candidates(

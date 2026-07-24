@@ -19,11 +19,7 @@ def apply_slippage(price: float, *, direction: str, kind: str, bps: float) -> fl
 
 
 def entry_fill_price(
-    *,
-    planned_entry: float,
-    direction: str,
-    bar: dict[str, Any],
-    slippage_bps: float = 0.0,
+    *, planned_entry: float, direction: str, bar: dict[str, Any], slippage_bps: float = 0.0,
 ) -> float | None:
     """Return a gap-aware stop-entry fill, or None when the bar never triggers."""
     opening = float(bar["open"])
@@ -105,19 +101,28 @@ def simulate_position(
     )
     entry = initial_entry
     entered_at = initial_entered_at
+    entry_slippage_dollars = 0.0
+    data_quality_flags: list[str] = []
+    observed: list[dict[str, Any]] = []
     for bar in relevant:
         entered_this_bar = False
         if entry is None:
+            clean_entry = entry_fill_price(
+                planned_entry=planned_entry, direction=direction, bar=bar, slippage_bps=0.0,
+            )
             entry = entry_fill_price(
                 planned_entry=planned_entry,
                 direction=direction,
                 bar=bar,
                 slippage_bps=entry_slippage_bps,
             )
-            if entry is None:
+            if entry is None or clean_entry is None:
                 continue
             entered_at = str(bar["timestamp"])
             entered_this_bar = True
+            data_quality_flags.append("entry_bar_path_unknown")
+            entry_slippage_dollars = round(abs(entry - clean_entry) * position_size, 4)
+        observed.append(bar)
         resolved = exit_fill(
             stop=stop,
             target=target,
@@ -128,6 +133,15 @@ def simulate_position(
         )
         if resolved is not None:
             reason, exit_price = resolved
+            clean_exit = exit_fill(
+                stop=stop,
+                target=target,
+                direction=direction,
+                bar=bar,
+                slippage_bps=0.0,
+                allow_open_gap=not entered_this_bar,
+            )
+            assert clean_exit is not None
             return _outcome(
                 entry=entry,
                 exit_price=exit_price,
@@ -139,21 +153,36 @@ def simulate_position(
                 exit_reason=reason,
                 fees=round_trip_fees(position_size, fee_per_share=fee_per_share),
                 same_bar_ambiguity=_both_stop_and_target(bar, stop, target),
+                entry_slippage_dollars=entry_slippage_dollars,
+                exit_slippage_dollars=round(abs(exit_price - float(clean_exit[1])) * position_size, 4),
+                observed_bars=observed,
+                data_quality_flags=data_quality_flags,
             )
     if entry is not None and not flatten_unresolved:
         return {
-            "status": "open", "fill_status": "filled", "entered_at": entered_at,
-            "closed_at": None, "actual_entry": round(entry, 4), "actual_exit": None,
-            "exit_reason": None, "fees": 0.0, "net_dollars": 0.0, "net_r": 0.0,
+            "status": "open",
+            "fill_status": "filled",
+            "entered_at": entered_at,
+            "closed_at": None,
+            "actual_entry": round(entry, 4),
+            "actual_exit": None,
+            "exit_reason": None,
+            "fees": 0.0,
+            "net_dollars": 0.0,
+            "net_r": 0.0,
             "same_bar_ambiguity": False,
+            "entry_slippage_dollars": entry_slippage_dollars,
+            "exit_slippage_dollars": 0.0,
+            **_analytics(entry, observed, direction, position_size, risk_dollars, entered_at, None),
+            "data_quality_flags": data_quality_flags,
         }
     if entry is not None and relevant:
         last = relevant[-1]
+        clean_exit = float(last["close"])
+        exit_price = apply_slippage(clean_exit, direction=direction, kind="exit", bps=exit_slippage_bps)
         return _outcome(
             entry=entry,
-            exit_price=apply_slippage(
-                float(last["close"]), direction=direction, kind="exit", bps=exit_slippage_bps
-            ),
+            exit_price=exit_price,
             direction=direction,
             position_size=position_size,
             risk_dollars=risk_dollars,
@@ -162,6 +191,10 @@ def simulate_position(
             exit_reason="eod_flatten",
             fees=round_trip_fees(position_size, fee_per_share=fee_per_share),
             same_bar_ambiguity=False,
+            entry_slippage_dollars=entry_slippage_dollars,
+            exit_slippage_dollars=round(abs(exit_price - clean_exit) * position_size, 4),
+            observed_bars=observed,
+            data_quality_flags=data_quality_flags,
         )
     return {
         "status": "expired",
@@ -175,6 +208,14 @@ def simulate_position(
         "net_dollars": 0.0,
         "net_r": 0.0,
         "same_bar_ambiguity": False,
+        "entry_slippage_dollars": 0.0,
+        "exit_slippage_dollars": 0.0,
+        "mfe_dollars": 0.0,
+        "mae_dollars": 0.0,
+        "mfe_r": 0.0,
+        "mae_r": 0.0,
+        "duration_seconds": 0,
+        "data_quality_flags": [],
     }
 
 
@@ -190,9 +231,21 @@ def _timestamp(value: str) -> datetime:
 
 
 def _outcome(
-    *, entry: float, exit_price: float, direction: str, position_size: float,
-    risk_dollars: float, entered_at: str | None, closed_at: str,
-    exit_reason: str, fees: float, same_bar_ambiguity: bool,
+    *,
+    entry: float,
+    exit_price: float,
+    direction: str,
+    position_size: float,
+    risk_dollars: float,
+    entered_at: str | None,
+    closed_at: str,
+    exit_reason: str,
+    fees: float,
+    same_bar_ambiguity: bool,
+    entry_slippage_dollars: float,
+    exit_slippage_dollars: float,
+    observed_bars: list[dict[str, Any]],
+    data_quality_flags: list[str],
 ) -> dict[str, Any]:
     gross = (exit_price - entry) * position_size if direction == "long" else (entry - exit_price) * position_size
     net = round(gross - fees, 4)
@@ -208,4 +261,39 @@ def _outcome(
         "net_dollars": net,
         "net_r": round(net / risk_dollars, 4) if risk_dollars else 0.0,
         "same_bar_ambiguity": same_bar_ambiguity,
+        "entry_slippage_dollars": entry_slippage_dollars,
+        "exit_slippage_dollars": exit_slippage_dollars,
+        **_analytics(entry, observed_bars, direction, position_size, risk_dollars, entered_at, closed_at),
+        "data_quality_flags": sorted(set(
+            data_quality_flags + (["same_bar_stop_target"] if same_bar_ambiguity else [])
+        )),
+    }
+
+
+def _analytics(
+    entry: float,
+    bars: list[dict[str, Any]],
+    direction: str,
+    position_size: float,
+    risk_dollars: float,
+    entered_at: str | None,
+    closed_at: str | None,
+) -> dict[str, Any]:
+    if not bars:
+        mfe = mae = 0.0
+    elif direction == "long":
+        mfe = (max(float(bar["high"]) for bar in bars) - entry) * position_size
+        mae = (min(float(bar["low"]) for bar in bars) - entry) * position_size
+    else:
+        mfe = (entry - min(float(bar["low"]) for bar in bars)) * position_size
+        mae = (entry - max(float(bar["high"]) for bar in bars)) * position_size
+    duration = 0
+    if entered_at and closed_at:
+        duration = max(0, int((_timestamp(closed_at) - _timestamp(entered_at)).total_seconds()))
+    return {
+        "mfe_dollars": round(max(0.0, mfe), 4),
+        "mae_dollars": round(min(0.0, mae), 4),
+        "mfe_r": round(max(0.0, mfe) / risk_dollars, 4) if risk_dollars else 0.0,
+        "mae_r": round(min(0.0, mae) / risk_dollars, 4) if risk_dollars else 0.0,
+        "duration_seconds": duration,
     }

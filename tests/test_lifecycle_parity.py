@@ -52,6 +52,14 @@ def test_shared_lifecycle_is_clock_independent_and_replayable():
         "net_dollars": 7.85,
         "net_r": 0.785,
         "same_bar_ambiguity": False,
+        "entry_slippage_dollars": 1.02,
+        "exit_slippage_dollars": 1.03,
+        "mfe_dollars": 13.98,
+        "mae_dollars": -6.02,
+        "mfe_r": 1.398,
+        "mae_r": -0.602,
+        "duration_seconds": 60,
+        "data_quality_flags": ["entry_bar_path_unknown"],
     }
 
 
@@ -81,6 +89,14 @@ def test_shared_lifecycle_records_no_fill_instead_of_dropping_candidate():
         "net_dollars": 0.0,
         "net_r": 0.0,
         "same_bar_ambiguity": False,
+        "entry_slippage_dollars": 0.0,
+        "exit_slippage_dollars": 0.0,
+        "mfe_dollars": 0.0,
+        "mae_dollars": 0.0,
+        "mfe_r": 0.0,
+        "mae_r": 0.0,
+        "duration_seconds": 0,
+        "data_quality_flags": [],
     }
 
 

@@ -57,6 +57,30 @@ CREATE TABLE IF NOT EXISTS candidate_events (
     features_json TEXT NOT NULL DEFAULT '{}'
 );
 
+CREATE TABLE IF NOT EXISTS candidate_outcomes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    candidate_event_id INTEGER NOT NULL UNIQUE REFERENCES candidate_events(id) ON DELETE CASCADE,
+    resolved_at TEXT NOT NULL,
+    fill_status TEXT NOT NULL,
+    entered_at TEXT,
+    closed_at TEXT,
+    actual_entry REAL,
+    actual_exit REAL,
+    exit_reason TEXT,
+    net_dollars REAL NOT NULL DEFAULT 0.0,
+    net_r REAL NOT NULL DEFAULT 0.0,
+    fees REAL NOT NULL DEFAULT 0.0,
+    entry_slippage_dollars REAL NOT NULL DEFAULT 0.0,
+    exit_slippage_dollars REAL NOT NULL DEFAULT 0.0,
+    mfe_dollars REAL NOT NULL DEFAULT 0.0,
+    mae_dollars REAL NOT NULL DEFAULT 0.0,
+    mfe_r REAL NOT NULL DEFAULT 0.0,
+    mae_r REAL NOT NULL DEFAULT 0.0,
+    duration_seconds INTEGER NOT NULL DEFAULT 0,
+    same_bar_ambiguity INTEGER NOT NULL DEFAULT 0 CHECK(same_bar_ambiguity IN (0, 1)),
+    data_quality_flags_json TEXT NOT NULL DEFAULT '[]'
+);
+
 CREATE TABLE IF NOT EXISTS paper_trades (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     proposal_id INTEGER NOT NULL REFERENCES proposals(id) ON DELETE CASCADE,
@@ -125,6 +149,7 @@ CREATE INDEX IF NOT EXISTS idx_paper_positions_status ON paper_positions(status,
 CREATE INDEX IF NOT EXISTS idx_model_usage_created ON model_usage(created_at);
 CREATE INDEX IF NOT EXISTS idx_candidate_events_key ON candidate_events(candidate_key);
 CREATE INDEX IF NOT EXISTS idx_candidate_events_disposition ON candidate_events(disposition, created_at);
+CREATE INDEX IF NOT EXISTS idx_candidate_outcomes_fill ON candidate_outcomes(fill_status, resolved_at);
 """
 
 
@@ -249,6 +274,52 @@ class JournalStore:
     def list_candidate_events(self) -> list[dict[str, Any]]:
         with self._conn() as conn:
             rows = conn.execute("SELECT * FROM candidate_events ORDER BY id").fetchall()
+        return [_decode(row) for row in rows]
+
+    def list_unresolved_candidate_events(self) -> list[dict[str, Any]]:
+        with self._conn() as conn:
+            rows = conn.execute(
+                """SELECT ce.* FROM candidate_events ce
+                   LEFT JOIN candidate_outcomes co ON co.candidate_event_id = ce.id
+                   WHERE co.id IS NULL ORDER BY ce.id"""
+            ).fetchall()
+        return [_decode(row) for row in rows]
+
+    def log_candidate_outcome(self, candidate_event_id: int, outcome: dict[str, Any]) -> int:
+        values = (
+            candidate_event_id, now_et(), str(outcome["fill_status"]),
+            _text_or_none(outcome.get("entered_at")), _text_or_none(outcome.get("closed_at")),
+            outcome.get("actual_entry"), outcome.get("actual_exit"),
+            _text_or_none(outcome.get("exit_reason")), float(outcome.get("net_dollars") or 0.0),
+            float(outcome.get("net_r") or 0.0), float(outcome.get("fees") or 0.0),
+            float(outcome.get("entry_slippage_dollars") or 0.0),
+            float(outcome.get("exit_slippage_dollars") or 0.0),
+            float(outcome.get("mfe_dollars") or 0.0), float(outcome.get("mae_dollars") or 0.0),
+            float(outcome.get("mfe_r") or 0.0), float(outcome.get("mae_r") or 0.0),
+            int(outcome.get("duration_seconds") or 0), int(bool(outcome.get("same_bar_ambiguity"))),
+            json.dumps(_json_safe(outcome.get("data_quality_flags") or []), sort_keys=True),
+        )
+        with self._conn() as conn:
+            conn.execute(
+                """INSERT INTO candidate_outcomes (
+                    candidate_event_id, resolved_at, fill_status, entered_at, closed_at,
+                    actual_entry, actual_exit, exit_reason, net_dollars, net_r, fees,
+                    entry_slippage_dollars, exit_slippage_dollars, mfe_dollars, mae_dollars,
+                    mfe_r, mae_r, duration_seconds, same_bar_ambiguity, data_quality_flags_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(candidate_event_id) DO NOTHING""",
+                values,
+            )
+            row = conn.execute(
+                "SELECT id FROM candidate_outcomes WHERE candidate_event_id = ?", (candidate_event_id,)
+            ).fetchone()
+            if row is None:
+                raise RuntimeError("candidate outcome upsert failed")
+            return int(row[0])
+
+    def list_candidate_outcomes(self) -> list[dict[str, Any]]:
+        with self._conn() as conn:
+            rows = conn.execute("SELECT * FROM candidate_outcomes ORDER BY id").fetchall()
         return [_decode(row) for row in rows]
 
     def recent_duplicate_proposal(
@@ -477,6 +548,10 @@ def _decode(row: sqlite3.Row) -> dict[str, Any]:
         data["candidate"] = json.loads(data.pop("candidate_json") or "{}")
     if "features_json" in data:
         data["features"] = json.loads(data.pop("features_json") or "{}")
+    if "data_quality_flags_json" in data:
+        data["data_quality_flags"] = json.loads(data.pop("data_quality_flags_json") or "[]")
+    if "same_bar_ambiguity" in data:
+        data["same_bar_ambiguity"] = bool(data["same_bar_ambiguity"])
     if "rule_adherent" in data:
         data["rule_adherent"] = bool(data["rule_adherent"])
     return data

@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 from trading_lab.fill_engine import apply_slippage, round_trip_fees, simulate_position
 from trading_lab.journal_store import JournalStore
+from trading_lab.market_calendar import XNYSCalendar
 
 ET = ZoneInfo("America/New_York")
 
@@ -130,10 +131,12 @@ def entry_window_open(now: datetime, no_new_entries_after: str | None) -> bool:
 
 def market_is_open(now: datetime | None = None) -> bool:
     now = now or datetime.now(ET)
-    if now.weekday() >= 5:
+    local = now.astimezone(ET)
+    calendar = XNYSCalendar()
+    if not calendar.is_open(local):
         return False
-    current = now.time()
-    return time(9, 35) <= current <= time(15, 55)
+    opening, _closing = calendar.session_bounds(local.date())
+    return local >= opening + timedelta(minutes=5)
 
 
 def _bars_by_symbol(bars: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:

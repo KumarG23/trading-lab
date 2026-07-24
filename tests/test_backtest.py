@@ -1,4 +1,4 @@
-from trading_lab.backtest import run_strategy_backtest
+from trading_lab.backtest import _candidate_session_bars, run_strategy_backtest
 
 
 def _bar(symbol, minute, high, low, close, volume):
@@ -38,6 +38,8 @@ def test_run_strategy_backtest_replays_candidates_to_closed_trades_with_metrics(
     assert result["metrics"]["total_r"] == 0.0
     assert result["metrics"]["expectancy_r"] == 0.0
     assert result["metrics"]["by_strategy"]["opening-range-breakout"]["trade_count"] == 1
+    assert result["candidate_rows"][0]["disposition"] == "policy_approved"
+    assert result["candidate_rows"][0]["outcome"]["fill_status"] == "filled"
 
 
 def test_run_strategy_backtest_applies_slippage_to_entries_and_exits():
@@ -174,3 +176,35 @@ def test_backtest_can_apply_bullish_market_regime_filter():
 
     assert result["proposals"] == 0
     assert result["trades"] == 0
+
+
+def test_backtest_fails_closed_on_duplicate_market_bars():
+    bars = [
+        _bar("AAPL", 0, 101.0, 99.0, 100.0, 1000),
+        _bar("AAPL", 0, 101.0, 99.0, 100.0, 1000),
+    ]
+
+    result = run_strategy_backtest(
+        bars, symbols=["AAPL"], enabled_strategies=["orb"],
+        account_equity=200.0, risk_dollars=2.0,
+    )
+
+    assert result["candidates"] == 0
+    assert result["data_quality"]["ok"] is False
+    assert result["data_quality"]["duplicate_bars"] == 1
+
+
+def test_candidate_lifecycle_bars_stop_at_live_flatten_cutoff():
+    candidate = {
+        "ticker": "AAPL",
+        "market_context": {"signal_timestamp": "2026-07-20T19:43:00Z"},
+    }
+    bars = [
+        {"symbol": "AAPL", "timestamp": "2026-07-20T19:44:00Z"},
+        {"symbol": "AAPL", "timestamp": "2026-07-20T19:45:00Z"},
+        {"symbol": "AAPL", "timestamp": "2026-07-20T20:00:00Z"},
+    ]
+
+    assert [bar["timestamp"] for bar in _candidate_session_bars(candidate, bars)] == [
+        "2026-07-20T19:44:00Z"
+    ]

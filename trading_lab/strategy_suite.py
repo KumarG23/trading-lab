@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from trading_lab.market_regime import bullish_market_regime
+from trading_lab.market_regime import bullish_market_regime, market_regime_label
 from trading_lab.momentum_pullback import generate_momentum_pullback_candidates
 from trading_lab.opening_range_breakout import generate_orb_candidates
 from trading_lab.vwap_reclaim import generate_vwap_reclaim_candidates
@@ -63,6 +63,12 @@ def generate_strategy_candidates(
 
     if require_bullish_market_regime and not bullish_market_regime(bars):
         candidates = [candidate for candidate in candidates if str(candidate.get("direction") or "").lower() != "long"]
+
+    regime = market_regime_label(bars)
+    for candidate in candidates:
+        context = dict(candidate.get("market_context") or {})
+        context["regime"] = regime
+        candidate["market_context"] = context
 
     return _cap_risk_for_notional(
         candidates,

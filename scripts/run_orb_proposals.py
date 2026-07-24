@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime, time, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 import sys
 from time import perf_counter
@@ -16,8 +16,11 @@ sys.path.insert(0, str(ROOT))
 from trading_lab.alpaca_client import AlpacaClient  # noqa: E402
 from trading_lab.autonomous_runner import AutonomousRunner  # noqa: E402
 from trading_lab.config import LabConfig  # noqa: E402
+from trading_lab.counterfactual import resolve_candidate_events  # noqa: E402
+from trading_lab.data_quality import validate_minute_bars  # noqa: E402
 from trading_lab.journal_store import JournalStore  # noqa: E402
 from trading_lab.local_worker import LocalAIWorker  # noqa: E402
+from trading_lab.market_calendar import XNYSCalendar, lifecycle_cutoffs  # noqa: E402
 from trading_lab.paper_lifecycle import completed_bar_end, entry_window_open, market_is_open, update_paper_positions  # noqa: E402
 from trading_lab.provenance import repository_code_sha, stable_config_hash  # noqa: E402
 from trading_lab.run_telemetry import write_run_telemetry  # noqa: E402
@@ -28,7 +31,7 @@ from trading_lab.watchlist import load_symbols  # noqa: E402
 
 ET = ZoneInfo("America/New_York")
 DEFAULT_WATCHLIST = ["AAPL", "MSFT", "NVDA", "AMD", "TSLA", "META", "AMZN", "GOOGL", "SPY", "QQQ"]
-NO_NEW_ENTRIES_AFTER = "14:30"
+
 
 
 def main() -> int:
@@ -68,7 +71,9 @@ def main() -> int:
         return 0
 
     symbols = load_symbols(args.symbols, watchlist_file=args.watchlist_file)
-    market_open_et = datetime.combine(now_et.date(), time(9, 30), ET)
+    calendar = XNYSCalendar()
+    market_open_et, _market_close_et = calendar.session_bounds(now_et.date())
+    no_new_entries_after, flatten_at = lifecycle_cutoffs(calendar, now_et.date())
     start = market_open_et.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     end = completed_bar_end(now_et).astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
@@ -76,14 +81,23 @@ def main() -> int:
     fetch_started = perf_counter()
     bars = client.fetch_stock_bars(symbols, timeframe="1Min", start=start, end=end)
     fetch_finished = perf_counter()
+    data_quality = validate_minute_bars(bars)
+    if data_quality["fatal"]:
+        payload = {
+            "ok": False, "mode": "paper_proposal_only_no_orders", "broker_orders": 0,
+            "error": "market_data_quality_gate", "data_quality": data_quality,
+        }
+        write_run_telemetry(args.telemetry_output, payload)
+        _emit(payload, args.quiet_no_events)
+        return 4
     store = JournalStore(args.db)
 
     lifecycle_started = perf_counter()
     lifecycle = update_paper_positions(
         store,
         bars,
-        no_new_entries_after=NO_NEW_ENTRIES_AFTER,
-        flatten_at="15:45",
+        no_new_entries_after=no_new_entries_after,
+        flatten_at=flatten_at,
         entry_slippage_bps=args.entry_slippage_bps,
         exit_slippage_bps=args.exit_slippage_bps,
         fee_per_share=args.fee_per_share,
@@ -102,7 +116,7 @@ def main() -> int:
         live_latest_only=True,
         require_bullish_market_regime=args.bullish_regime_filter,
     )
-    if not entry_window_open(now_et, NO_NEW_ENTRIES_AFTER):
+    if not entry_window_open(now_et, no_new_entries_after):
         candidates = []
     strategy_finished = perf_counter()
 
@@ -142,6 +156,14 @@ def main() -> int:
         },
     ).process_candidates(candidates)
     decision_finished = perf_counter()
+    counterfactual = resolve_candidate_events(
+        store,
+        bars,
+        session_complete=now_et.time() >= datetime.strptime(flatten_at, "%H:%M").time(),
+        entry_slippage_bps=args.entry_slippage_bps,
+        exit_slippage_bps=args.exit_slippage_bps,
+        fee_per_share=args.fee_per_share,
+    )
     export_started = perf_counter()
     training_export = None if args.no_training_export else export_training_examples(args.db, args.training_output)
     export_finished = perf_counter()
@@ -163,6 +185,8 @@ def main() -> int:
         "bullish_regime_filter": args.bullish_regime_filter,
         "symbols": symbols,
         "bars": len(bars),
+        "data_quality": data_quality,
+        "session_cutoffs": {"no_new_entries_after": no_new_entries_after, "flatten_at": flatten_at},
         "candidates": len(candidates),
         "max_reviews_per_run": args.max_reviews_per_run,
         "max_active_positions": args.max_active_positions,
@@ -174,6 +198,7 @@ def main() -> int:
         },
         "logged_proposal_ids": proposal_ids,
         "lifecycle": lifecycle,
+        "counterfactual": counterfactual,
         "training_export": training_export,
         "start": start,
         "end": end,
