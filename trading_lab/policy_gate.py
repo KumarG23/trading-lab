@@ -12,6 +12,7 @@ class PolicyViolation(str, Enum):
     MISSING_STOP = "missing_stop"
     MISSING_TARGET = "missing_target"
     INVALID_DIRECTION = "invalid_direction"
+    MISSING_STRATEGY = "missing_strategy"
     SHORTING_DISABLED = "shorting_disabled"
     INVALID_RISK = "invalid_risk"
     RISK_TOO_HIGH = "risk_too_high"
@@ -81,6 +82,8 @@ class PolicyGate:
             violations.append(PolicyViolation.BANNED_TICKER)
         if direction not in {"long", "short"}:
             violations.append(PolicyViolation.INVALID_DIRECTION)
+        if not str(proposal.get("strategy_id") or "").strip():
+            violations.append(PolicyViolation.MISSING_STRATEGY)
         if direction == "short" and not self.allow_short:
             violations.append(PolicyViolation.SHORTING_DISABLED)
         if entry is None:

@@ -85,8 +85,13 @@ class AutonomousRunner:
                 weekly_realized_loss=0.0,
             )
             if not decision.ok:
+                self.store.log_candidate_event(
+                    candidate,
+                    disposition="policy_rejected",
+                    disposition_reason={"policy_violations": decision.violations},
+                )
                 continue
-            if self.store.recent_duplicate_proposal(
+            duplicate = self.store.recent_duplicate_proposal(
                 ticker=str(candidate["ticker"]),
                 strategy_id=str(candidate["strategy_id"]),
                 direction=str(candidate["direction"]),
@@ -94,7 +99,13 @@ class AutonomousRunner:
                 stop=_float_or_none(candidate.get("stop")),
                 target=_float_or_none(candidate.get("target")),
                 within_minutes=self.dedupe_minutes,
-            ):
+            )
+            if duplicate:
+                self.store.log_candidate_event(
+                    candidate,
+                    disposition="duplicate",
+                    disposition_reason={"duplicate_of_proposal_id": int(duplicate["id"])},
+                )
                 continue
             if self.max_reviews_per_run is not None and review_attempts >= self.max_reviews_per_run:
                 review = {
@@ -125,6 +136,12 @@ class AutonomousRunner:
                 weekly_realized_loss=portfolio_weekly_loss,
             )
             portfolio_admitted = (active_slots is None or active_slots > 0) and portfolio_decision.ok
+            if portfolio_admitted:
+                disposition = "admitted_portfolio"
+            elif active_slots is not None and active_slots <= 0:
+                disposition = "slot_blocked"
+            else:
+                disposition = "admitted_research"
             checklist.update(
                 {
                     "policy_approved": True,
@@ -153,6 +170,14 @@ class AutonomousRunner:
                 risk_officer_objection=str(review.get("risk_officer_objection") or ""),
                 model_used=str(review.get("model_used") or "unknown"),
                 data_sources=list(candidate.get("data_sources") or []),
+                candidate_event=candidate,
+                candidate_disposition=disposition,
+                candidate_disposition_reason={
+                    "portfolio_policy_violations": portfolio_decision.violations,
+                    "active_slot_available": active_slots is None or active_slots > 0,
+                    "local_worker_shadow_status": str(review.get("shadow_status") or "unknown"),
+                    "local_worker_shadow_approved": bool(review.get("approved", False)),
+                },
             )
             if self.create_paper_positions:
                 self.store.create_paper_position(

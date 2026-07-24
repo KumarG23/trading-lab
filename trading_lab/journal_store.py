@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import math
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta
@@ -31,6 +33,19 @@ CREATE TABLE IF NOT EXISTS proposals (
     rule_checklist_json TEXT NOT NULL DEFAULT '{}',
     model_used TEXT,
     data_sources_json TEXT NOT NULL DEFAULT '[]'
+);
+
+CREATE TABLE IF NOT EXISTS candidate_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    candidate_key TEXT NOT NULL,
+    ticker TEXT,
+    strategy_id TEXT,
+    direction TEXT,
+    disposition TEXT NOT NULL,
+    disposition_reason_json TEXT NOT NULL DEFAULT '{}',
+    candidate_json TEXT NOT NULL,
+    proposal_id INTEGER REFERENCES proposals(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS paper_trades (
@@ -99,6 +114,8 @@ CREATE INDEX IF NOT EXISTS idx_proposals_dedupe ON proposals(ticker, strategy_id
 CREATE INDEX IF NOT EXISTS idx_paper_trades_proposal ON paper_trades(proposal_id);
 CREATE INDEX IF NOT EXISTS idx_paper_positions_status ON paper_positions(status, ticker);
 CREATE INDEX IF NOT EXISTS idx_model_usage_created ON model_usage(created_at);
+CREATE INDEX IF NOT EXISTS idx_candidate_events_key ON candidate_events(candidate_key);
+CREATE INDEX IF NOT EXISTS idx_candidate_events_disposition ON candidate_events(disposition, created_at);
 """
 
 
@@ -113,6 +130,7 @@ def init_db(path: str | Path) -> None:
         conn.executescript(SCHEMA)
         _ensure_column(conn, "paper_trades", "fees", "REAL NOT NULL DEFAULT 0.0")
         _ensure_column(conn, "paper_positions", "fees", "REAL NOT NULL DEFAULT 0.0")
+        _ensure_column(conn, "candidate_events", "proposal_id", "INTEGER REFERENCES proposals(id) ON DELETE SET NULL")
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
@@ -156,6 +174,9 @@ class JournalStore:
         reason_to_skip: str | None = None,
         model_used: str | None = None,
         data_sources: list[str] | None = None,
+        candidate_event: dict[str, Any] | None = None,
+        candidate_disposition: str | None = None,
+        candidate_disposition_reason: dict[str, Any] | None = None,
     ) -> int:
         with self._conn() as conn:
             cur = conn.execute(
@@ -173,7 +194,37 @@ class JournalStore:
                     model_used, json.dumps(data_sources or [], sort_keys=True),
                 ),
             )
-            return int(cur.lastrowid)
+            proposal_id = int(cur.lastrowid)
+            if candidate_event is not None and candidate_disposition is not None:
+                _insert_candidate_event(
+                    conn,
+                    candidate_event,
+                    disposition=candidate_disposition,
+                    disposition_reason=candidate_disposition_reason,
+                    proposal_id=proposal_id,
+                )
+            return proposal_id
+
+    def log_candidate_event(
+        self,
+        candidate: dict[str, Any],
+        *,
+        disposition: str,
+        disposition_reason: dict[str, Any] | None = None,
+    ) -> int:
+        with self._conn() as conn:
+            return _insert_candidate_event(
+                conn,
+                candidate,
+                disposition=disposition,
+                disposition_reason=disposition_reason,
+                proposal_id=None,
+            )
+
+    def list_candidate_events(self) -> list[dict[str, Any]]:
+        with self._conn() as conn:
+            rows = conn.execute("SELECT * FROM candidate_events ORDER BY id").fetchall()
+        return [_decode(row) for row in rows]
 
     def recent_duplicate_proposal(
         self,
@@ -395,6 +446,10 @@ def _decode(row: sqlite3.Row) -> dict[str, Any]:
         data["rule_checklist"] = json.loads(data.pop("rule_checklist_json") or "{}")
     if "data_sources_json" in data:
         data["data_sources"] = json.loads(data.pop("data_sources_json") or "[]")
+    if "disposition_reason_json" in data:
+        data["disposition_reason"] = json.loads(data.pop("disposition_reason_json") or "{}")
+    if "candidate_json" in data:
+        data["candidate"] = json.loads(data.pop("candidate_json") or "{}")
     if "rule_adherent" in data:
         data["rule_adherent"] = bool(data["rule_adherent"])
     return data
@@ -411,3 +466,71 @@ def _close_enough(a: Any, b: Any, tolerance: float = 0.0025) -> bool:
     if af == bf:
         return True
     return abs(af - bf) / max(abs(af), 1.0) <= tolerance
+
+
+def _text_or_none(value: Any) -> str | None:
+    return None if value is None else str(value)
+
+
+def _insert_candidate_event(
+    conn: sqlite3.Connection,
+    candidate: dict[str, Any],
+    *,
+    disposition: str,
+    disposition_reason: dict[str, Any] | None,
+    proposal_id: int | None,
+) -> int:
+    normalized = _json_safe(candidate)
+    candidate_json = json.dumps(normalized, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    candidate_key = hashlib.sha256(candidate_json.encode("utf-8")).hexdigest()
+    cur = conn.execute(
+        """
+        INSERT INTO candidate_events (
+            created_at, candidate_key, ticker, strategy_id, direction,
+            disposition, disposition_reason_json, candidate_json, proposal_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            now_et(), candidate_key, _text_or_none(candidate.get("ticker")),
+            _text_or_none(candidate.get("strategy_id")), _text_or_none(candidate.get("direction")),
+            disposition, json.dumps(_json_safe(disposition_reason or {}), sort_keys=True, allow_nan=False),
+            candidate_json, proposal_id,
+        ),
+    )
+    if cur.lastrowid is None:
+        raise RuntimeError("candidate event insert did not return an id")
+    return int(cur.lastrowid)
+
+
+def _json_safe(value: Any) -> Any:
+    if value is None or isinstance(value, (bool, int, str)):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else f"<non-finite:{value}>"
+    if isinstance(value, dict):
+        string_items = {key: _json_safe(item) for key, item in value.items() if isinstance(key, str)}
+        other_items = [
+            {
+                "type": f"{type(key).__module__}.{type(key).__qualname__}",
+                "key": _json_safe(key),
+                "value": _json_safe(item),
+            }
+            for key, item in value.items()
+            if not isinstance(key, str)
+        ]
+        result = {key: string_items[key] for key in sorted(string_items)}
+        if other_items:
+            special_key = "__non_string_keys__"
+            while special_key in result:
+                special_key = f"_{special_key}"
+            result[special_key] = sorted(
+                other_items,
+                key=lambda item: json.dumps(item, sort_keys=True, separators=(",", ":"), allow_nan=False),
+            )
+        return result
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, (set, frozenset)):
+        items = [_json_safe(item) for item in value]
+        return sorted(items, key=lambda item: json.dumps(item, sort_keys=True, default=str))
+    return f"<{type(value).__module__}.{type(value).__qualname__}>"

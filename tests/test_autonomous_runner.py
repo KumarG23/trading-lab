@@ -45,6 +45,52 @@ def _good_candidate(ticker="AAPL"):
     }
 
 
+def test_autonomous_runner_persists_every_generated_candidate_event(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    worker = FakeWorker()
+    runner = AutonomousRunner(store=store, worker=worker, account_equity=1000)
+    rejected = _good_candidate("DOGE-USD")
+    rejected["asset_class"] = "crypto"
+
+    proposal_ids = runner.process_candidates([_good_candidate(), rejected, _good_candidate()])
+
+    events = store.list_candidate_events()
+    assert len(proposal_ids) == 1
+    assert [event["disposition"] for event in events] == [
+        "admitted_portfolio",
+        "duplicate",
+        "policy_rejected",
+    ]
+    assert events[0]["candidate_key"] == events[1]["candidate_key"]
+    assert len(events[0]["candidate_key"]) == 64
+    assert events[1]["disposition_reason"]["duplicate_of_proposal_id"] == proposal_ids[0]
+    assert "banned_asset" in events[2]["disposition_reason"]["policy_violations"]
+    assert events[2]["candidate"]["ticker"] == "DOGE-USD"
+    assert events[0]["proposal_id"] == proposal_ids[0]
+    assert worker.reviewed == ["AAPL"]
+    assert len(store.list_paper_positions()) == 1
+
+
+def test_candidate_ledger_survives_malformed_policy_rejections(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    runner = AutonomousRunner(store=store, worker=FakeWorker(), account_equity=1000)
+    invalid_direction = _good_candidate("SIDE")
+    invalid_direction["direction"] = "sideways"
+    missing_identity = {"asset_class": "stock", "risk_dollars": 10}
+    missing_strategy = _good_candidate("IBM")
+    missing_strategy.pop("strategy_id")
+    non_numeric = _good_candidate("TEXT")
+    non_numeric["planned_entry"] = "TBD"
+
+    assert runner.process_candidates([invalid_direction, missing_identity, missing_strategy, non_numeric]) == []
+
+    events = store.list_candidate_events()
+    assert len(events) == 4
+    assert {event["disposition"] for event in events} == {"policy_rejected"}
+    assert {event["direction"] for event in events} == {None, "sideways", "long"}
+    assert store.list_proposals() == []
+
+
 def test_autonomous_runner_logs_only_policy_approved_proposals(tmp_path):
     store = JournalStore(tmp_path / "lab.db")
     runner = AutonomousRunner(store=store, worker=FakeWorker(), account_equity=1000)
@@ -146,6 +192,7 @@ def test_autonomous_runner_tracks_all_research_candidates_but_caps_portfolio_adm
     assert worker.reviewed == ["AAPL", "MSFT"]
     assert len(store.list_active_paper_positions()) == 2
     assert [proposal["rule_checklist"]["portfolio_admitted"] for proposal in proposals] == [True, False]
+    assert [event["disposition"] for event in store.list_candidate_events()] == ["admitted_portfolio", "slot_blocked"]
 
 
 def test_autonomous_runner_prioritizes_underrepresented_strategy(tmp_path):

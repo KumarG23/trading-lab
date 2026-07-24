@@ -1,5 +1,8 @@
 import sqlite3
 
+import pytest
+
+import trading_lab.journal_store as journal_store
 from trading_lab.journal_store import JournalStore, init_db
 
 
@@ -10,7 +13,7 @@ def test_init_db_creates_proposal_trade_review_and_model_usage_tables(tmp_path):
 
     conn = sqlite3.connect(db_path)
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    assert {"proposals", "paper_trades", "reviews", "model_usage"}.issubset(tables)
+    assert {"candidate_events", "proposals", "paper_trades", "reviews", "model_usage"}.issubset(tables)
 
 
 def test_journal_store_logs_proposal_and_paper_trade_round_trip(tmp_path):
@@ -46,6 +49,43 @@ def test_journal_store_logs_proposal_and_paper_trade_round_trip(tmp_path):
     assert proposals[0]["rule_checklist"]["stop_defined"] is True
     assert trades[0]["proposal_id"] == proposal_id
     assert trades[0]["actual_r_multiple"] == 2.0
+
+
+def test_candidate_event_key_is_stable_for_non_json_edge_values(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    candidate = {1: "numeric key", "1": "string key", "ticker": "EDGE", "values": {3, 1, 2}, "score": float("nan")}
+
+    store.log_candidate_event(candidate, disposition="policy_rejected")
+    store.log_candidate_event(dict(reversed(list(candidate.items()))), disposition="policy_rejected")
+
+    events = store.list_candidate_events()
+    assert events[0]["candidate_key"] == events[1]["candidate_key"]
+    assert events[0]["candidate"]["score"] == "<non-finite:nan>"
+
+
+def test_atomic_proposal_candidate_event_insert_rolls_back_together(tmp_path, monkeypatch):
+    store = JournalStore(tmp_path / "lab.db")
+
+    def fail_event(*args, **kwargs):
+        raise RuntimeError("simulated event write failure")
+
+    monkeypatch.setattr(journal_store, "_insert_candidate_event", fail_event)
+    with pytest.raises(RuntimeError, match="simulated event write failure"):
+        store.log_proposal(
+            ticker="AAPL",
+            strategy_id="opening-range-breakout",
+            direction="long",
+            trigger="break",
+            planned_entry=101,
+            stop=100,
+            target=103,
+            thesis="atomic",
+            candidate_event={"ticker": "AAPL"},
+            candidate_disposition="admitted_portfolio",
+        )
+
+    assert store.list_proposals() == []
+    assert store.list_candidate_events() == []
 
 
 def test_journal_store_excludes_quarantined_rows_from_default_lists(tmp_path):
