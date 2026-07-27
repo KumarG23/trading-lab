@@ -80,6 +80,7 @@ def main() -> int:
 
     if args.succinct:
         runtime = _load_json(RUNTIME)
+        runtime_stale = not RUNTIME.exists() or (now.timestamp() - RUNTIME.stat().st_mtime) > 600
         timings = runtime.get("timings_ms") or {}
         strategy_stats: dict[str, dict[str, float]] = {}
         for position in closed_today:
@@ -104,6 +105,7 @@ def main() -> int:
                 {
                     "date": now.date().isoformat(),
                     "last_scan_ok": bool(runtime.get("ok")),
+                    "last_scan_stale": runtime_stale,
                     "scan_interval_minutes": 1,
                     "loop_ms": timings.get("total", 0),
                     "decision_ms": timings.get("decision", 0),
@@ -125,7 +127,7 @@ def main() -> int:
                     "active_positions": len(active),
                     "portfolio_active_positions": len(active_portfolio),
                     "portfolio_position_limit": int(runtime.get("max_active_positions") or 2),
-                    "errors": 0 if runtime.get("ok") else 1,
+                    "errors": 0 if runtime.get("ok") and not runtime_stale else 1,
                     "blocker": "No strategy has passed walk-forward promotion gates.",
                 }
             )

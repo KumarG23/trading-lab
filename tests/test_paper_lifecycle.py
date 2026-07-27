@@ -228,7 +228,7 @@ def test_update_paper_positions_does_not_flatten_position_twice_after_intrabar_c
         proposal_id=proposal_id, ticker="AAPL", strategy_id="orb", direction="long",
         entry=101, stop=100, target=103, position_size=1, risk_dollars=1,
     )
-    now = (datetime.now(ET) + timedelta(seconds=1)).replace(hour=15, minute=50, second=0, microsecond=0)
+    now = (datetime.now(ET) + timedelta(days=1)).replace(hour=15, minute=50, second=0, microsecond=0)
 
     result = update_paper_positions(
         store,

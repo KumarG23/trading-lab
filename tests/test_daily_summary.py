@@ -45,3 +45,17 @@ def test_daily_summary_is_compact_and_surfaces_health_performance_and_blockers()
         "Open research: 1 · portfolio: 1/2 · errors: 0",
         "Gate: No strategy has passed walk-forward promotion gates.",
     ]
+
+
+def test_daily_summary_marks_stale_scanner_as_error():
+    text = format_daily_summary(
+        {
+            "date": "2026-07-27",
+            "last_scan_ok": True,
+            "last_scan_stale": True,
+            "scan_interval_minutes": 1,
+            "errors": 1,
+        }
+    )
+
+    assert text.splitlines()[1].startswith("Health: ERROR (stale scanner)")

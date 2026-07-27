@@ -15,7 +15,10 @@ def max_drawdown_r(values: Iterable[float]) -> float:
 
 
 def format_daily_summary(summary: Mapping[str, Any]) -> str:
-    health = "OK" if summary.get("last_scan_ok") else "ERROR"
+    if summary.get("last_scan_stale"):
+        health = "ERROR (stale scanner)"
+    else:
+        health = "OK" if summary.get("last_scan_ok") else "ERROR"
     loop_ms = round(float(summary.get("loop_ms") or 0))
     decision_ms = float(summary.get("decision_ms") or 0)
     pnl = float(summary.get("pnl") or 0)
