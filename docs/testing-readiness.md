@@ -50,19 +50,18 @@ git diff --check
 .venv/bin/python scripts/weekly_evidence_review.py
 ```
 
-Latest code-suite verification before v5 regeneration:
+Latest verified v5 implementation and audit run:
 
 ```text
-148 passed
+152 passed
 compileall passed
 git diff --check passed
 ```
 
 ## Remaining promotion blockers
 
-- Regenerate immutable v5 evidence from the clean committed feature/evaluation code.
-- Verify the v5 manifest and artifact hashes.
-- Run the full weekly evaluator and inspect the untouched holdout.
+- Current v5 walk-forward and untouched holdout expectancy are negative after modeled costs; no strategy/model is eligible.
+- Current no-fill model does not beat the base-rate probability benchmark out of sample.
 - Require positive cost-adjusted expectancy and profit factor above 1.2 in both walk-forward and final holdout evidence.
 - Require enough independently selected sessions, not merely correlated proposal rows.
 - Require the no-fill model to outperform a base-rate predictor out of sample.
