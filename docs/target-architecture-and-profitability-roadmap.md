@@ -64,6 +64,8 @@ It does not generate orders, alter stops, size positions, or bypass policy. Dete
 
 Start with logistic regression as the sanity baseline, then compare LightGBM/XGBoost-style gradient boosting. Neural sequence models and LLM fine-tuning are later experiments only if simpler models plateau and the dataset justifies their complexity.
 
+Current implementation uses the shared `candidate-decision-features-v5` contract for historical replay/evaluation and live candidate provenance. It records normalized decision-time fields only: strategy/category, direction, time since open and time bucket, volume-ratio aliases, liquidity proxy, normalized volatility, gap/range context, opening-range width/breakout distance, VWAP distance aliases and slope, pullback depth, regime context, stop distance, planned reward:risk, and short-window momentum where available. Outcome, fill, MFE/MAE, and realized PnL fields are excluded from model inputs.
+
 ## Non-negotiable evidence rules
 
 1. Store every generated candidate, including rejected, duplicate, slot-blocked, and model-rejected candidates.
@@ -75,6 +77,7 @@ Start with logistic regression as the sanity baseline, then compare LightGBM/XGB
 7. Report strategy, symbol, volatility, regime, and time-of-day slices—not only aggregate P&L.
 8. Compare against deterministic always-admit and rule-only baselines.
 9. Keep live trading disabled until explicit promotion gates are computed artifacts rather than prose.
+10. Treat expected OHLC path uncertainty as warnings, same-bar stop/target as an exclusion or sensitivity-test flag, and stale/provenance/chronology defects as fatal.
 
 ## Phase 0 — Freeze the wrong learning loop
 

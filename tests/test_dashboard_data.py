@@ -165,3 +165,28 @@ def test_dashboard_snapshot_includes_latest_runtime_latency(tmp_path):
     assert snapshot["runtime"]["available"] is True
     assert snapshot["runtime"]["timings_ms"]["total"] == 869.1
     assert snapshot["runtime"]["strategies"] == ["orb", "reclaim"]
+
+
+def test_dashboard_snapshot_includes_compact_evidence_review_status(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    evidence_path = tmp_path / "weekly-review.json"
+    evidence_path.write_text(
+        '{"ok": true, "evaluation_status": "evaluated", "promotion_ready": false, "rows": 120, "artifacts": {"model_card_markdown": "model-card.md"}}',
+        encoding="utf-8",
+    )
+
+    snapshot = build_dashboard_snapshot(
+        store,
+        account_equity=200,
+        live_enabled=False,
+        evidence_status_path=evidence_path,
+    )
+
+    assert snapshot["evidence_review"] == {
+        "available": True,
+        "ok": True,
+        "evaluation_status": "evaluated",
+        "promotion_ready": False,
+        "rows": 120,
+        "model_card_markdown": "model-card.md",
+    }

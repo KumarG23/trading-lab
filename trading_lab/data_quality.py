@@ -4,6 +4,23 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
 
+WARNING_EVIDENCE_FLAGS = {
+    "entry_bar_path_unknown",
+    "missing_minutes",
+}
+EXCLUSION_EVIDENCE_FLAGS = {
+    "same_bar_stop_target",
+}
+FATAL_EVIDENCE_FLAGS = {
+    "stale_data",
+    "stale_quote",
+    "missing_provenance",
+    "impossible_chronology",
+    "duplicate_bars",
+    "non_monotonic",
+    "zero_volume",
+}
+
 
 def validate_minute_bars(bars: list[dict[str, Any]]) -> dict[str, Any]:
     """Return deterministic structural quality counts for minute OHLCV bars."""
@@ -43,6 +60,31 @@ def validate_minute_bars(bars: list[dict[str, Any]]) -> dict[str, Any]:
     flags = sorted(name for name, count in counts.items() if count)
     fatal = any(counts[name] for name in ("duplicate_bars", "non_monotonic", "zero_volume"))
     return {"ok": not flags, "fatal": fatal, **counts, "flags": flags, "bars": len(bars)}
+
+
+def classify_evidence_quality_flags(flags: list[str] | tuple[str, ...] | None) -> dict[str, Any]:
+    """Classify preserved evidence flags by promotion severity.
+
+    Unknown flags are fatal so new data defects cannot be silently laundered by
+    older readiness code.
+    """
+    preserved = sorted({str(flag) for flag in (flags or []) if str(flag)})
+    warnings = sorted(flag for flag in preserved if flag in WARNING_EVIDENCE_FLAGS)
+    exclusions = sorted(flag for flag in preserved if flag in EXCLUSION_EVIDENCE_FLAGS)
+    fatal = sorted(
+        flag for flag in preserved
+        if flag in FATAL_EVIDENCE_FLAGS
+        or flag not in WARNING_EVIDENCE_FLAGS | EXCLUSION_EVIDENCE_FLAGS
+    )
+    return {
+        "flags": preserved,
+        "warning_flags": warnings,
+        "exclusion_flags": exclusions,
+        "fatal_flags": fatal,
+        "has_warning": bool(warnings),
+        "has_exclusion": bool(exclusions),
+        "has_fatal": bool(fatal),
+    }
 
 
 def _timestamp(value: str) -> datetime:

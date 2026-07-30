@@ -1,4 +1,4 @@
-from trading_lab.strategy_suite import generate_strategy_candidates
+from trading_lab.strategy_suite import _enrich_decision_context, generate_strategy_candidates
 
 
 def _bar(symbol, minute, high, low, close, volume):
@@ -35,7 +35,27 @@ def test_generate_strategy_candidates_combines_orb_and_vwap_when_enabled():
         "opening-range-breakout",
         "vwap-trend-imbalance",
     }
+    for candidate in candidates:
+        context = candidate["market_context"]
+        assert context["current_volume"] > 0
+        assert context["dollar_volume"] > 0
+        assert context["range_pct"] > 0
+        assert "market_return" in context
     assert {candidate["market_context"]["regime"] for candidate in candidates} == {"unknown"}
+
+
+def test_context_enrichment_never_uses_future_bar_across_mixed_timezone_formats():
+    candidate = {"ticker": "AAPL"}
+    context = {"signal_timestamp": "2026-06-01T12:30:00Z"}
+    bars = [
+        {"symbol": "AAPL", "timestamp": "2026-06-01T08:00:00-04:00", "open": 100, "high": 101, "low": 99, "close": 100, "volume": 100},
+        {"symbol": "AAPL", "timestamp": "2026-06-01T09:00:00-04:00", "open": 100, "high": 999, "low": 1, "close": 999, "volume": 777},
+    ]
+
+    _enrich_decision_context(candidate, context, bars)
+
+    assert context["volume"] == 100.0
+    assert context["close"] == 100.0
 
 
 def test_generate_strategy_candidates_caps_risk_to_fit_small_account_notional_limit():

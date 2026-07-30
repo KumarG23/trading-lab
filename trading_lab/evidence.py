@@ -1,14 +1,63 @@
 from __future__ import annotations
 
 import hashlib
+import gzip
 import json
 from collections import Counter
+from pathlib import Path
 from typing import Any
 
+from trading_lab.data_quality import classify_evidence_quality_flags
+from trading_lab.decision_features import FEATURE_SCHEMA_SHA256, FEATURE_SCHEMA_VERSION
 from trading_lab.journal_store import JournalStore
 
 
 _ARTIFACT_HASH_FIELDS = ("period", "sha256", "candidate_count", "bars", "data_quality")
+CANDIDATE_OUTCOME_SCHEMA_VERSION = "counterfactual-candidate-v5"
+
+
+def verify_replay_evidence_manifest(manifest: dict[str, Any], evidence_root: str | Path) -> dict[str, Any]:
+    root = Path(evidence_root).resolve()
+    errors: list[str] = []
+    artifacts = list(manifest.get("artifacts") or [])
+    listed_paths = [str(artifact.get("path") or "") for artifact in artifacts]
+    if len(set(listed_paths)) != len(listed_paths):
+        errors.append("duplicate_artifact_paths")
+    actual_paths = {path.name for path in root.glob("*.jsonl.gz") if path.is_file()}
+    unexpected = sorted(actual_paths - set(listed_paths))
+    missing_from_disk = sorted(set(listed_paths) - actual_paths)
+    errors.extend(f"artifact_unexpected:{name}" for name in unexpected)
+    errors.extend(f"artifact_missing:{name}" for name in missing_from_disk)
+    for artifact in artifacts:
+        path = (root / str(artifact.get("path") or "")).resolve()
+        if root not in path.parents:
+            errors.append(f"artifact_path_outside_root:{path.name}")
+            continue
+        if not path.is_file():
+            continue
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        expected = str(artifact.get("sha256") or "")
+        if actual != expected:
+            errors.append(f"artifact_sha256_mismatch:{path.name}")
+            continue
+        try:
+            with gzip.open(path, "rt", encoding="utf-8") as handle:
+                actual_count = sum(1 for line in handle if line.strip())
+        except (OSError, UnicodeError):
+            errors.append(f"artifact_unreadable:{path.name}")
+            continue
+        expected_count = int(artifact.get("candidate_count") or 0)
+        if actual_count != expected_count:
+            errors.append(f"artifact_candidate_count_mismatch:{path.name}:{actual_count}!={expected_count}")
+    expected_dataset = str(manifest.get("dataset_sha256") or "")
+    actual_dataset = dataset_artifact_digest(artifacts)
+    if actual_dataset != expected_dataset:
+        errors.append("dataset_artifact_digest_mismatch")
+    coverage_count = int((manifest.get("coverage") or {}).get("candidate_count") or 0)
+    artifact_count = sum(int(item.get("candidate_count") or 0) for item in artifacts)
+    if coverage_count != artifact_count:
+        errors.append(f"candidate_count_mismatch:{coverage_count}!={artifact_count}")
+    return {"verified": not errors, "errors": errors, "artifacts": len(artifacts)}
 
 
 def dataset_artifact_digest(artifacts: list[dict[str, Any]]) -> str:
@@ -46,6 +95,8 @@ def build_dataset_manifest(
         "source": source,
         "code_sha": code_sha,
         "schema_version": schema_version,
+        "feature_schema_version": FEATURE_SCHEMA_VERSION,
+        "feature_schema_sha256": FEATURE_SCHEMA_SHA256,
         "dataset_sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
         "coverage": {
             "bar_count": len(ordered_bars),
@@ -99,8 +150,15 @@ def build_readiness(
         dataset_sha = str(dataset_manifest.get("dataset_sha256") or "")
         if len(dataset_sha) != 64 or any(character not in "0123456789abcdef" for character in dataset_sha.lower()):
             blockers.append("dataset_sha256_invalid")
-        if not dataset_manifest.get("schema_version"):
-            blockers.append("dataset_schema_version_missing")
+        schema_version = str(dataset_manifest.get("schema_version") or "")
+        if schema_version != CANDIDATE_OUTCOME_SCHEMA_VERSION:
+            blockers.append(f"dataset_schema_version_mismatch:{schema_version or 'missing'}")
+        feature_version = str(dataset_manifest.get("feature_schema_version") or "")
+        if feature_version != FEATURE_SCHEMA_VERSION:
+            blockers.append(f"dataset_feature_schema_version_mismatch:{feature_version or 'missing'}")
+        feature_sha = str(dataset_manifest.get("feature_schema_sha256") or "")
+        if feature_sha != FEATURE_SCHEMA_SHA256:
+            blockers.append("dataset_feature_schema_sha256_mismatch")
         if not dataset_manifest.get("source"):
             blockers.append("dataset_source_missing")
     if model_evaluation is None:
@@ -112,9 +170,19 @@ def build_readiness(
             blockers.append("model_evaluation_split_policy_invalid")
         if not bool(model_evaluation.get("all_promotion_gates_pass")):
             blockers.append("model_evaluation_gates_failed")
-    quality_failures = sum(1 for row in outcome_rows if row.get("data_quality_flags"))
-    if quality_failures:
-        blockers.append(f"candidate_outcome_quality_flags:{quality_failures}")
+    quality_warning_flags: Counter[str] = Counter()
+    quality_exclusion_flags: Counter[str] = Counter()
+    quality_fatal_flags: Counter[str] = Counter()
+    for row in outcome_rows:
+        classified = classify_evidence_quality_flags(row.get("data_quality_flags"))
+        quality_warning_flags.update(classified["warning_flags"])
+        quality_exclusion_flags.update(classified["exclusion_flags"])
+        quality_fatal_flags.update(classified["fatal_flags"])
+    quality_warnings = sum(quality_warning_flags.values())
+    quality_exclusions = sum(quality_exclusion_flags.values())
+    quality_fatal = sum(quality_fatal_flags.values())
+    if quality_fatal:
+        blockers.append(f"candidate_outcome_fatal_quality_flags:{quality_fatal}")
     blockers.append("human_promotion_not_granted")
     return {
         "readiness_version": "trading-lab-readiness-v1",
@@ -126,11 +194,19 @@ def build_readiness(
             "candidate_events": event_count,
             "resolved_candidates": resolved_count,
             "unresolved_candidates": event_count - resolved_count,
-            "outcome_quality_failures": quality_failures,
+            "outcome_quality_failures": quality_fatal,
+            "outcome_quality_warnings": quality_warnings,
+            "outcome_quality_exclusions": quality_exclusions,
+            "outcome_quality_fatal": quality_fatal,
             "by_disposition": dict(sorted(dispositions.items())),
             "by_strategy": dict(sorted(strategies.items())),
             "by_session": dict(sorted(sessions.items())),
             "by_regime": dict(sorted(regimes.items())),
+        },
+        "quality": {
+            "warning_flags": dict(sorted(quality_warning_flags.items())),
+            "exclusion_flags": dict(sorted(quality_exclusion_flags.items())),
+            "fatal_flags": dict(sorted(quality_fatal_flags.items())),
         },
         "dataset_manifest": dataset_manifest,
         "model_evaluation": model_evaluation,

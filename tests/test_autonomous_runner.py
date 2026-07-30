@@ -101,7 +101,7 @@ def test_candidate_event_captures_decision_time_features_and_run_provenance(tmp_
     assert event["data_cutoff_at"] == "2026-07-23T13:36:00Z"
     assert event["code_sha"] == "abc123"
     assert event["config_hash"] == "config456"
-    assert event["feature_schema_version"] == "candidate-features-v1"
+    assert event["feature_schema_version"] == "candidate-decision-features-v5"
     assert event["strategy_version"] == "1"
     package = Path(__file__).parents[1] / "trading_lab"
     expected_hash = hashlib.sha256(
@@ -110,6 +110,9 @@ def test_candidate_event_captures_decision_time_features_and_run_provenance(tmp_
     assert event["strategy_hash"] == expected_hash
     assert event["features"]["planned_entry"] == 101.0
     assert event["features"]["market_context"]["opening_range_high"] == 100.0
+    assert len(event["features"]["decision_feature_schema_sha256"]) == 64
+    assert event["features"]["decision_feature_coverage"]["schema_version"] == "candidate-decision-features-v5"
+    assert event["features"]["normalized_decision_features"]["opening_range_breakout_distance_pct"] == 0.00990099
 
 
 def test_candidate_ledger_survives_malformed_policy_rejections(tmp_path):

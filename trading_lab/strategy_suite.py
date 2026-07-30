@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from collections import defaultdict
+from datetime import datetime, timezone
+from statistics import mean
 from typing import Any
 
 from trading_lab.market_regime import bullish_market_regime, market_regime_label
@@ -68,6 +71,7 @@ def generate_strategy_candidates(
     for candidate in candidates:
         context = dict(candidate.get("market_context") or {})
         context["regime"] = regime
+        _enrich_decision_context(candidate, context, bars)
         candidate["market_context"] = context
 
     return _cap_risk_for_notional(
@@ -105,3 +109,65 @@ def _cap_risk_for_notional(
             candidate["risk_dollars"] = round(max_risk_for_notional, 4)
         capped.append(candidate)
     return capped
+
+
+def _enrich_decision_context(candidate: dict[str, Any], context: dict[str, Any], bars: list[dict[str, Any]]) -> None:
+    """Add model inputs observable at signal time; never inspect future bars."""
+    signal = str(context.get("signal_timestamp") or "")
+    signal_at = _timestamp_utc(signal)
+    symbol = str(candidate.get("ticker") or "").upper()
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for bar in bars:
+        if _timestamp_utc(bar.get("timestamp")) <= signal_at:
+            grouped[str(bar.get("symbol") or "").upper()].append(bar)
+
+    visible = sorted(grouped.get(symbol, []), key=lambda row: _timestamp_utc(row.get("timestamp")))
+    if visible:
+        current = visible[-1]
+        close = float(current["close"])
+        high = float(current["high"])
+        low = float(current["low"])
+        volume = float(current.get("volume") or 0.0)
+        context.setdefault("current_volume", volume)
+        context.setdefault("volume", volume)
+        context.setdefault("close", close)
+        context.setdefault("dollar_volume", close * volume)
+        context.setdefault("high", high)
+        context.setdefault("low", low)
+        context.setdefault("range_pct", (high - low) / close if close else 0.0)
+        if len(visible) >= 2:
+            context.setdefault("previous_close", float(visible[-2]["close"]))
+        if len(visible) >= 4:
+            context.setdefault("close_3_bars_ago", float(visible[-4]["close"]))
+        if len(visible) >= 6:
+            context.setdefault("close_5_bars_ago", float(visible[-6]["close"]))
+
+        recent = visible[-15:]
+        true_ranges: list[float] = []
+        for index, bar in enumerate(recent):
+            bar_high = float(bar["high"])
+            bar_low = float(bar["low"])
+            previous = float(recent[index - 1]["close"]) if index else None
+            true_ranges.append(
+                max(bar_high - bar_low, abs(bar_high - previous), abs(bar_low - previous))
+                if previous is not None else bar_high - bar_low
+            )
+        if true_ranges:
+            context.setdefault("atr", mean(true_ranges[-14:]))
+
+    market_rows = grouped.get("SPY") or grouped.get("QQQ") or []
+    market = sorted(market_rows, key=lambda row: _timestamp_utc(row.get("timestamp")))
+    if market:
+        first = float(market[0].get("open") or market[0]["close"])
+        latest = float(market[-1]["close"])
+        context.setdefault("market_return", (latest - first) / first if first else 0.0)
+
+
+def _timestamp_utc(value: Any) -> datetime:
+    text = str(value or "").strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    parsed = datetime.fromisoformat(text)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)

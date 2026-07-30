@@ -17,8 +17,8 @@ from trading_lab.journal_store import JournalStore  # noqa: E402
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate fail-closed machine-readable promotion readiness.")
     parser.add_argument("--db", type=Path, default=ROOT / "journal" / "trading-lab.db")
-    parser.add_argument("--evidence-root", type=Path, default=ROOT / "data" / "evidence" / "candidate-outcomes-v4")
-    parser.add_argument("--dataset-manifest", type=Path, default=ROOT / "data" / "processed" / "evidence-manifest.json")
+    parser.add_argument("--evidence-root", type=Path, default=ROOT / "data" / "evidence" / "candidate-outcomes-v5")
+    parser.add_argument("--dataset-manifest", type=Path, default=ROOT / "data" / "processed" / "evidence-manifest-v5.json")
     parser.add_argument("--model-evaluation", type=Path, default=ROOT / "data" / "processed" / "model-evaluation.json")
     parser.add_argument("--output", type=Path, default=ROOT / "data" / "processed" / "readiness.json")
     parser.add_argument("--minimum-candidates", type=int, default=10_000)

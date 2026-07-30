@@ -75,6 +75,7 @@ def _snapshot() -> dict:
         live_enabled=cfg.live_trading_enabled,
         scanner_path=ROOT / "data" / "processed" / "scanner-watchlist.json",
         telemetry_path=ROOT / "data" / "processed" / "last-paper-watch.json",
+        evidence_status_path=ROOT / "data" / "processed" / "weekly-review" / "weekly-review.json",
     )
 
 
@@ -87,6 +88,8 @@ def render_dashboard(snapshot: dict) -> str:
     scanner_cards = "".join(_scanner_html(row) for row in scanner.get("top_matches", [])[:8]) or '<div class="empty">Scanner has not run yet.</div>'
     scanner_watchlist = ", ".join(scanner.get("watchlist", [])[:30]) or "fallback watchlist"
     runtime = snapshot.get("runtime") or {}
+    evidence = snapshot.get("evidence_review") or {}
+    evidence_html = _evidence_review_html(evidence)
     timings = runtime.get("timings_ms") or {}
     metrics = snapshot["metrics"]
     performance = "".join(_kpi(*kpi) for kpi in performance_kpis(metrics))
@@ -157,6 +160,7 @@ footer {{ color:var(--muted); margin-top:18px; font-size:12px; font-family:ui-mo
   <div class="card wide section"><h2>Latest proposals</h2><div class="list">{proposals}</div></div>
   <div class="card wide section"><h2>Proposals by strategy</h2><div class="pills">{by_strategy}</div></div>
   <div class="card wide section"><h2>Readiness gates</h2><div class="list">{readiness}</div></div>
+  <div class="card full section"><h2>Weekly evidence audit</h2>{evidence_html}</div>
 </section>
 <footer>Generated {snapshot['generated_at']} · refreshes every 60s · broker orders enabled: {snapshot['safety']['broker_orders_enabled']}</footer>
 </main>
@@ -202,6 +206,20 @@ def _scanner_html(row: dict) -> str:
 def _readiness_html(key: str, item: dict) -> str:
     status = item["status"]
     return f'<div class="ready"><strong>{key.replace("_", " ")}</strong><span class="status-{status}">{status.upper()}</span><span class="meta">{item["detail"]}</span></div>'
+
+
+def _evidence_review_html(review: dict) -> str:
+    if not review.get("available"):
+        return '<div class="empty">No weekly evidence audit artifact yet.</div>'
+    status = str(review.get("evaluation_status") or "unknown")
+    promotion = "READY" if review.get("promotion_ready") else "BLOCKED"
+    return (
+        '<div class="pills">'
+        f'<div class="pill"><span>Evaluation</span><strong>{status}</strong></div>'
+        f'<div class="pill"><span>Rows</span><strong>{int(review.get("rows") or 0)}</strong></div>'
+        f'<div class="pill"><span>Promotion</span><strong>{promotion}</strong></div>'
+        '</div>'
+    )
 
 
 if __name__ == "__main__":

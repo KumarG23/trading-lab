@@ -1,18 +1,18 @@
 # Agentic Trading Lab
 
-Small-money, high-risk, fun day-trading research lab. Controlled market goblin science, not retirement planning.
+Small-money, high-risk day-trading research lab. This is controlled research, not retirement planning.
 
 ## Mission
 
-Use local Qwen/Qwen3.6 plus Codex to discover, test, journal, and improve risky short-term/day-trading strategies while minimizing paid API burn.
+Use deterministic scanners, historical replay, local analysis, and Codex-built tooling to discover, test, journal, and improve risky short-term/day-trading strategies while minimizing paid API burn.
 
-Jarvis is the orchestrator and risk governor. Codex builds scanners, backtests, journals, and analysis scripts. Local models handle private trade logs, pattern review, and account-aware analysis where possible.
+Jarvis is the orchestrator and risk governor. Codex builds scanners, backtests, journals, and analysis scripts. Local models handle offline private trade-log review and postmortems where explicitly enabled; they do not place orders or promote strategies.
 
 ## Current phase
 
 Phase 1: research / paper / proposal mode only.
 
-No Robinhood MCP connection. No live orders. No OAuth-enabled slot machine. The goblin remains in a terrarium.
+No Robinhood MCP connection. No live orders. Broker orders remain disabled.
 
 ## Initial folder structure
 
@@ -50,10 +50,10 @@ No Robinhood MCP connection. No live orders. No OAuth-enabled slot machine. The 
 1. Define a strategy as explicit rules in `strategies/*.yaml`.
 2. Codex builds or updates scanner/backtest/journal scripts.
 3. Generate paper/proposal trades only.
-4. Log every proposal and outcome into `journal/trading-lab.db`.
-5. Run deterministic metrics: R, expectancy, drawdown, profit factor, rule adherence.
-6. Local Qwen/Qwen3.6 reviews compact journal summaries privately.
-7. Jarvis summarizes evidence and promotes, revises, or kills strategies.
+4. Log every proposal and outcome into `journal/trading-lab.db` as provenance.
+5. Generate historical counterfactual evidence under `data/evidence/candidate-outcomes-v5/`.
+6. Run deterministic metrics and session-ordered purged walk-forward evaluation with a final untouched holdout.
+7. Jarvis reviews the model card/readiness artifacts and promotes, revises, or kills strategies only after explicit human approval.
 
 ## Implemented local tooling
 
@@ -64,6 +64,8 @@ trading_lab/
   metrics.py          # R, expectancy, drawdown, profit factor, adherence
 scripts/
   init_lab_db.py      # creates journal/trading-lab.db
+  evaluate_evidence.py
+  weekly_evidence_review.py
 analysis/
   journal_metrics.py  # prints metrics JSON from paper trades
 tests/                # pytest coverage for the above
@@ -72,13 +74,19 @@ tests/                # pytest coverage for the above
 Initialize the local journal DB:
 
 ```bash
-python3 scripts/init_lab_db.py
+.venv/bin/python scripts/init_lab_db.py
 ```
 
 Print current paper-trading metrics:
 
 ```bash
-python3 analysis/journal_metrics.py
+.venv/bin/python analysis/journal_metrics.py
+```
+
+Run bounded offline evidence diagnostics:
+
+```bash
+.venv/bin/python scripts/weekly_evidence_review.py --smoke
 ```
 
 ## Metrics that matter

@@ -1,4 +1,4 @@
-from trading_lab.data_quality import validate_minute_bars
+from trading_lab.data_quality import classify_evidence_quality_flags, validate_minute_bars
 
 
 def _bar(ts, volume=100):
@@ -46,3 +46,23 @@ def test_missing_minutes_are_flagged_but_not_globally_fatal():
     assert report["ok"] is False
     assert report["fatal"] is False
     assert report["flags"] == ["missing_minutes"]
+
+
+def test_evidence_quality_flags_are_severity_classified_without_laundering():
+    classified = classify_evidence_quality_flags([
+        "entry_bar_path_unknown",
+        "same_bar_stop_target",
+        "stale_quote",
+        "custom_unrecognized_flag",
+    ])
+
+    assert classified["warning_flags"] == ["entry_bar_path_unknown"]
+    assert classified["exclusion_flags"] == ["same_bar_stop_target"]
+    assert classified["fatal_flags"] == ["custom_unrecognized_flag", "stale_quote"]
+    assert classified["flags"] == [
+        "custom_unrecognized_flag",
+        "entry_bar_path_unknown",
+        "same_bar_stop_target",
+        "stale_quote",
+    ]
+    assert classified["has_fatal"] is True

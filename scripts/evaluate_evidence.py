@@ -22,17 +22,23 @@ def load_rows(root: Path) -> list[dict]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run leakage-safe purged walk-forward logistic evaluation.")
-    parser.add_argument("--evidence-root", type=Path, default=ROOT / "data" / "evidence" / "candidate-outcomes-v4")
+    parser = argparse.ArgumentParser(description="Run leakage-safe purged walk-forward evidence evaluation.")
+    parser.add_argument("--evidence-root", type=Path, default=ROOT / "data" / "evidence" / "candidate-outcomes-v5")
     parser.add_argument("--output", type=Path, default=ROOT / "data" / "processed" / "model-evaluation.json")
     parser.add_argument("--minimum-samples", type=int, default=1_000)
     parser.add_argument("--folds", type=int, default=5)
     parser.add_argument("--embargo-sessions", type=int, default=1)
+    parser.add_argument("--final-holdout-fraction", type=float, default=0.2)
+    parser.add_argument("--minimum-selected", type=int, default=25)
+    parser.add_argument("--minimum-sessions", type=int, default=20)
     args = parser.parse_args()
     rows = load_rows(args.evidence_root)
     result = purged_walk_forward_evaluate(
         rows, minimum_samples=args.minimum_samples, folds=args.folds,
         embargo_sessions=args.embargo_sessions,
+        final_holdout_fraction=args.final_holdout_fraction,
+        minimum_selected=args.minimum_selected,
+        minimum_sessions=args.minimum_sessions,
     )
     result.update({"mode": "offline_research_no_orders", "broker_orders": 0})
     args.output.parent.mkdir(parents=True, exist_ok=True)

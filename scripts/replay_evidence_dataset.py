@@ -15,7 +15,8 @@ sys.path.insert(0, str(ROOT))
 
 from trading_lab.backtest import run_strategy_backtest  # noqa: E402
 from trading_lab.config import LabConfig  # noqa: E402
-from trading_lab.evidence import dataset_artifact_digest  # noqa: E402
+from trading_lab.evidence import CANDIDATE_OUTCOME_SCHEMA_VERSION, dataset_artifact_digest  # noqa: E402
+from trading_lab.decision_features import FEATURE_SCHEMA_SHA256, FEATURE_SCHEMA_VERSION  # noqa: E402
 
 from trading_lab.provenance import repository_code_sha  # noqa: E402
 from trading_lab.raw_cache import read_bar_chunk, verify_raw_manifest  # noqa: E402
@@ -24,8 +25,8 @@ from trading_lab.raw_cache import read_bar_chunk, verify_raw_manifest  # noqa: E
 def main() -> int:
     parser = argparse.ArgumentParser(description="Replay immutable Alpaca chunks into counterfactual evidence rows.")
     parser.add_argument("--raw-manifest", type=Path, default=ROOT / "data" / "processed" / "alpaca-raw-manifest.json")
-    parser.add_argument("--output-root", type=Path, default=ROOT / "data" / "evidence" / "candidate-outcomes-v4")
-    parser.add_argument("--manifest", type=Path, default=ROOT / "data" / "processed" / "evidence-manifest.json")
+    parser.add_argument("--output-root", type=Path, default=ROOT / "data" / "evidence" / "candidate-outcomes-v5")
+    parser.add_argument("--manifest", type=Path, default=ROOT / "data" / "processed" / "evidence-manifest-v5.json")
     parser.add_argument("--strategies", default="orb,vwap,reclaim,momentum")
     parser.add_argument("--entry-slippage-bps", type=float, default=5.0)
     parser.add_argument("--exit-slippage-bps", type=float, default=10.0)
@@ -62,7 +63,9 @@ def main() -> int:
         "manifest_version": "trading-lab-dataset-manifest-v1",
         "source": "alpaca-iex",
         "code_sha": code_sha,
-        "schema_version": "counterfactual-candidate-v4",
+        "schema_version": CANDIDATE_OUTCOME_SCHEMA_VERSION,
+        "feature_schema_version": FEATURE_SCHEMA_VERSION,
+        "feature_schema_sha256": FEATURE_SCHEMA_SHA256,
         "dataset_sha256": dataset_sha,
         "coverage": {
             "bar_count": int(raw_coverage.get("bar_count") or 0),

@@ -58,6 +58,7 @@ def generate_orb_candidates(
                         timestamp=breakout_bar["timestamp"],
                         range_high=range_high,
                         range_low=range_low,
+                        volume_ratio=volume / avg_volume,
                     )
                 )
                 emitted += 1
@@ -77,6 +78,7 @@ def generate_orb_candidates(
                         timestamp=breakout_bar["timestamp"],
                         range_high=range_high,
                         range_low=range_low,
+                        volume_ratio=volume / avg_volume,
                     )
                 )
                 emitted += 1
@@ -97,6 +99,7 @@ def _candidate(
     timestamp: str,
     range_high: float,
     range_low: float,
+    volume_ratio: float,
 ) -> dict[str, Any]:
     return {
         "ticker": symbol,
@@ -118,6 +121,7 @@ def _candidate(
             "signal_timestamp": timestamp,
             "opening_range_high": round(range_high, 4),
             "opening_range_low": round(range_low, 4),
+            "volume_ratio": round(volume_ratio, 4),
         },
     }
 

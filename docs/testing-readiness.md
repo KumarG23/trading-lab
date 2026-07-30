@@ -1,75 +1,72 @@
 # Autonomous Testing Readiness
 
-Date: 2026-06-29
+Updated: 2026-07-30
 
-## Current readiness verdict
+## Current verdict
 
-Ready for **local autonomous paper/proposal-loop smoke testing**.
+Ready for deterministic local proposal capture, counterfactual paper simulation, historical evidence generation, and offline model evaluation.
 
-Current simulator topology (2026-07-23): all qualified nonduplicate signals enter the research lane, while only two simultaneous positions are marked `portfolio_admitted`. Research and portfolio metrics are reported separately. The research runaway cap is 50 proposals/day, dedupe is 30 minutes, new entries stop at 14:30 ET, and positions flatten at 15:45 ET.
+Not ready for broker-submitted paper orders or live capital. Broker order placement remains outside the weekly review and model-training paths.
 
-Not ready for broker-connected paper orders until order lifecycle, duplicate-order locks, fill tracking, and broker/local reconciliation are implemented and verified. Alpaca paper credentials are already configured for safe read-only access.
+## Safety topology
 
-## What is ready
+- The active minute loop uses `--no-local-ai`; candidate generation, policy checks, and outcome simulation are deterministic.
+- Every qualified nonduplicate signal enters the research lane. Portfolio-admitted proposals remain a separately constrained subset.
+- Research and portfolio metrics are reported separately.
+- Research runaway cap: 50 proposals per day.
+- Duplicate suppression: 30 minutes.
+- New entries stop at 14:30 ET; simulated positions flatten at 15:45 ET.
+- Historical replay and weekly evidence review refuse live-enabled configuration and place zero broker orders.
+- Strategy or model promotion always retains a human-approval blocker.
 
-- Deterministic risk/policy gate rejects banned assets, missing stops, bad reward:risk, excess risk, and daily trade-limit violations.
-- Local Qwen worker is wired as the default proposal reviewer.
-- Old `Claude_Bot` data has been sanitized into compact JSONL examples and is injected into local model review prompts as relevant training memory.
-- Codex escalation path is documented as the engineering fallback, not part of the tick loop.
-- SQLite journal is initialized and stores proposals/paper trades/reviews/model usage.
-- Metrics tooling reports R expectancy, profit factor, drawdown, and rule adherence.
-- Tests are green.
+## Evidence and evaluation
 
-## Smoke-tested commands
+The v5 contract uses normalized decision-time features shared by live capture and historical replay. Post-entry outcome fields are labels or diagnostics, never model features.
+
+Offline evaluation includes:
+
+- Per-strategy logistic baselines.
+- Combined logistic baseline.
+- Gradient-boosted classifier.
+- Direct expected-net-R regressor.
+- Separate class-weighted no-fill-risk model.
+- Cost-adjusted calibration thresholds chosen from calibration sessions only.
+- Session-ordered purged walk-forward folds.
+- A separately embargoed final holdout.
+- Candidate and independent-session sample gates.
+- Profit-factor, expectancy, drawdown, strategy/regime/time-bucket, feature-coverage, and data-quality diagnostics.
+- Warning, exclusion, and fatal quality severities. Ambiguous/fatal rows cannot enter model fitting.
+- Cryptographic verification of immutable compressed evidence artifacts and exact feature/schema manifests.
+
+Live `training/proposal_outcomes.jsonl` remains provenance/audit material. Historical `data/evidence/candidate-outcomes-v5/` is the predictive evaluation corpus. Old Claude_Bot examples remain sanitized prior art for optional offline language-model analysis; they are not predictive labels and are not used in the hot path.
+
+## Verification commands
 
 ```bash
-python3 scripts/init_lab_db.py
-python3 scripts/export_claude_bot_training.py data/raw/claude_bot_trades.db training/claude_bot_sanitized_examples.jsonl --limit 5000
-python3 scripts/autonomous_paper_loop.py data/sample_candidates.json --no-local-ai
-python3 scripts/autonomous_paper_loop.py data/sample_candidates.json --db journal/local-ai-smoke.db
-python3 analysis/journal_metrics.py
-python3 -m pytest tests -q
+.venv/bin/python -m pytest tests -q
+.venv/bin/python -m compileall -q trading_lab scripts tests
+git diff --check
+.venv/bin/python scripts/replay_evidence_dataset.py
+.venv/bin/python scripts/weekly_evidence_review.py
 ```
 
-Latest verification:
+Latest code-suite verification before v5 regeneration:
 
 ```text
-51 passed
-local model endpoint: http://100.117.167.61:8098/v1 reachable
-legacy sanitized training examples exported: 3670
-legacy training labels: hold_filter=3604, candidate_setup=61, avoid_or_repair=5
-proposal/outcome training dataset: training/proposal_outcomes.jsonl regenerated from journal/trading-lab.db
-current proposal/outcome examples: 33
+148 passed
+compileall passed
+git diff --check passed
 ```
 
-## What the local model did in smoke testing
+## Remaining promotion blockers
 
-The local Qwen worker reviewed the sample AAPL ORB candidate and rejected it because the setup was under-specified / not strongly confirmed. That is acceptable behavior. Better a suspicious goblin than an eager one.
+- Regenerate immutable v5 evidence from the clean committed feature/evaluation code.
+- Verify the v5 manifest and artifact hashes.
+- Run the full weekly evaluator and inspect the untouched holdout.
+- Require positive cost-adjusted expectancy and profit factor above 1.2 in both walk-forward and final holdout evidence.
+- Require enough independently selected sessions, not merely correlated proposal rows.
+- Require the no-fill model to outperform a base-rate predictor out of sample.
+- Verify broker order lifecycle, reconciliation, duplicate-order locks, recovery, and kill switches before broker paper execution.
+- Require explicit human approval before any promotion.
 
-## What is blocked
-
-Nothing is blocking local autonomous proposal testing.
-
-Broker-connected paper trading is now confirmed for Alpaca **read-only account access** using `/home/neal/trading-lab/.env`, copied from the old R16 `C:\code\Claude_Bot\.env` after Neal confirmed it contains the credentials.
-
-Verified safe Alpaca paper account check:
-
-```text
-status=ACTIVE
-alpaca_paper=True
-trading_blocked=False
-account_blocked=False
-trade_suspended_by_user=False
-```
-
-Still do **not** connect Robinhood live MCP yet.
-
-## Next build step
-
-Build the first real autonomous candidate generator:
-
-```text
-OHLCV source -> opening range breakout scanner -> policy gate -> local Qwen review -> proposal journal
-```
-
-Start with CSV/local historical bars so we can test without broker credentials. Then swap the data source to Alpaca paper market data once credentials exist.
+The default interpretation of a failed gate is “the strategy/model is not ready,” not “loosen the gate until the chart turns green.”

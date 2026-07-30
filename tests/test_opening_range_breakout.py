@@ -14,6 +14,7 @@ def test_generate_orb_candidate_when_price_breaks_opening_range_high():
     candidates = generate_orb_candidates(bars, opening_range_minutes=5, risk_dollars=10)
 
     assert len(candidates) == 1
+    assert candidates[0]["market_context"]["volume_ratio"] == 2.5
     candidate = candidates[0]
     assert candidate["ticker"] == "AAPL"
     assert candidate["direction"] == "long"

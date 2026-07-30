@@ -7,7 +7,12 @@ from pathlib import Path
 import subprocess
 from typing import Any
 
-FEATURE_SCHEMA_VERSION = "candidate-features-v1"
+from trading_lab.decision_features import (
+    FEATURE_SCHEMA_SHA256,
+    FEATURE_SCHEMA_VERSION,
+    decision_features,
+    feature_coverage_diagnostics,
+)
 STRATEGY_VERSIONS = {
     "opening-range-breakout": "1",
     "vwap-trend-imbalance": "1",
@@ -39,6 +44,9 @@ def candidate_event_provenance(candidate: dict[str, Any], run: dict[str, Any]) -
         "risk_dollars": candidate.get("risk_dollars"),
         "market_context": context,
         "rule_checklist": _safe_mapping(candidate.get("rule_checklist"), "rule_checklist"),
+        "decision_feature_schema_sha256": FEATURE_SCHEMA_SHA256,
+        "decision_feature_coverage": feature_coverage_diagnostics([{"candidate": candidate}]),
+        "normalized_decision_features": _finite_features(decision_features({"candidate": candidate})),
     }
     return {
         "run_id": str(run.get("run_id") or ""),
@@ -86,3 +94,15 @@ def _bar_end(value: Any) -> str | None:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.isoformat().replace("+00:00", "Z")
+
+
+def _finite_features(features: dict[str, Any]) -> dict[str, float | None]:
+    normalized: dict[str, float | None] = {}
+    for key, value in sorted(features.items()):
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            normalized[key] = None
+            continue
+        normalized[key] = number if number == number and abs(number) != float("inf") else None
+    return normalized
