@@ -226,6 +226,7 @@ def purged_walk_forward_evaluate(
         "split_policy": "purged_walk_forward_no_random_split",
         "feature_schema_version": FEATURE_SCHEMA_VERSION,
         "feature_coverage": coverage,
+        "feature_drift": _feature_drift_diagnostics(usable),
         "evidence_quality": quality,
         "eligibility": eligibility,
         "no_fill_model": no_fill_model,
@@ -428,6 +429,53 @@ def _no_fill_walk_forward_evaluate(
         "roc_auc": round(weighted("roc_auc"), 6) if weighted("roc_auc") is not None else None,
         "folds": fold_metrics,
         "final_holdout": evaluate_split(walk_sessions, holdout_sessions) if holdout_sessions else {"status": "skipped"},
+    }
+
+
+def _feature_drift_diagnostics(
+    rows: list[dict[str, Any]],
+    *,
+    window_fraction: float = 0.2,
+) -> dict[str, Any]:
+    """Compare earliest and latest session windows with population stability index."""
+    by_session: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        if _session(row):
+            by_session[_session(row)].append(row)
+    sessions = sorted(by_session)
+    if len(sessions) < 2:
+        return {"status": "skipped", "warning": "feature_drift_requires_multiple_sessions"}
+    window = max(1, min(len(sessions) // 2, int(round(len(sessions) * window_fraction))))
+    early = [row for session in sessions[:window] for row in by_session[session]]
+    recent = [row for session in sessions[-window:] for row in by_session[session]]
+    features: dict[str, dict[str, Any]] = {}
+    for name in FEATURE_NAMES:
+        early_values = np.asarray([decision_features(row).get(name, np.nan) for row in early], dtype=float)
+        recent_values = np.asarray([decision_features(row).get(name, np.nan) for row in recent], dtype=float)
+        pooled = np.concatenate([early_values[np.isfinite(early_values)], recent_values[np.isfinite(recent_values)]])
+        if len(pooled) < 2 or len(np.unique(pooled)) < 2:
+            continue
+        edges = np.unique(np.quantile(pooled, np.linspace(0, 1, 11)))
+        if len(edges) < 2:
+            continue
+        edges[0], edges[-1] = -np.inf, np.inf
+        early_counts = np.histogram(early_values[np.isfinite(early_values)], bins=edges)[0].astype(float)
+        recent_counts = np.histogram(recent_values[np.isfinite(recent_values)], bins=edges)[0].astype(float)
+        early_rates = np.append(early_counts / len(early_values), 1.0 - np.isfinite(early_values).mean())
+        recent_rates = np.append(recent_counts / len(recent_values), 1.0 - np.isfinite(recent_values).mean())
+        early_rates = np.clip(early_rates, 1e-6, None)
+        recent_rates = np.clip(recent_rates, 1e-6, None)
+        psi = float(np.sum((recent_rates - early_rates) * np.log(recent_rates / early_rates)))
+        features[name] = {"psi": round(psi, 6)}
+    return {
+        "status": "evaluated",
+        "method": "population_stability_index_chronological_session_windows",
+        "early_sessions": window,
+        "recent_sessions": window,
+        "early_rows": len(early),
+        "recent_rows": len(recent),
+        "features": features,
+        "high_drift_features": sorted(name for name, metric in features.items() if metric["psi"] >= 0.25),
     }
 
 

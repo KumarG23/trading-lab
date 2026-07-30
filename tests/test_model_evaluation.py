@@ -7,7 +7,36 @@ from trading_lab.decision_features import (
     decision_features,
     feature_coverage_diagnostics,
 )
-from trading_lab.model_evaluation import purged_walk_forward_evaluate
+from trading_lab.model_evaluation import _feature_drift_diagnostics, purged_walk_forward_evaluate
+
+
+def test_feature_drift_diagnostics_compare_chronological_session_windows():
+    rows = []
+    start = date(2026, 1, 1)
+    for day in range(20):
+        session = start + timedelta(days=day)
+        rows.append({
+            "candidate": {
+                "strategy_id": "opening-range-breakout",
+                "direction": "long",
+                "planned_entry": 100,
+                "stop": 99,
+                "target": 102,
+                "market_context": {
+                    "signal_timestamp": f"{session.isoformat()}T14:00:00Z",
+                    "volume_ratio": 1.0 if day < 10 else 5.0,
+                },
+            },
+            "outcome": {"net_r": 1.0},
+        })
+
+    drift = _feature_drift_diagnostics(rows, window_fraction=0.5)
+
+    assert drift["status"] == "evaluated"
+    assert drift["early_sessions"] == 10
+    assert drift["recent_sessions"] == 10
+    assert drift["features"]["volume_ratio"]["psi"] > 1.0
+    assert "volume_ratio" in drift["high_drift_features"]
 
 
 def test_v5_decision_features_are_normalized_leakage_safe_and_alias_aware():
@@ -163,6 +192,9 @@ def test_purged_walk_forward_uses_ordered_sessions_and_reports_calibration_metri
         "holdout_not_tuned",
     }.issubset(result["promotion_gates"])
     assert result["split_policy"] == "purged_walk_forward_no_random_split"
+    assert result["feature_drift"]["status"] == "evaluated"
+    assert result["feature_drift"]["early_sessions"] > 0
+    assert result["feature_drift"]["recent_sessions"] > 0
 
 
 def test_evaluation_compares_baselines_uses_holdout_and_ev_thresholds():
