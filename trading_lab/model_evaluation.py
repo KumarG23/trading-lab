@@ -967,7 +967,7 @@ def _profit_factor(values: np.ndarray) -> float | None:
     wins = float(values[values > 0].sum())
     losses = abs(float(values[values < 0].sum()))
     if losses == 0:
-        return None if wins == 0 else 999999.0
+        return None
     return round(wins / losses, 6)
 
 
@@ -986,7 +986,7 @@ def _aggregate_profit_factor(folds: list[dict[str, Any]], model_name: str) -> fl
     gains = sum(float(fold["models"][model_name].get("gross_profit_r") or 0.0) for fold in folds)
     losses = sum(float(fold["models"][model_name].get("gross_loss_r") or 0.0) for fold in folds)
     if losses == 0:
-        return None if gains == 0 else 999999.0
+        return None
     return round(gains / losses, 6)
 
 

@@ -7,7 +7,12 @@ from trading_lab.decision_features import (
     decision_features,
     feature_coverage_diagnostics,
 )
-from trading_lab.model_evaluation import _feature_drift_diagnostics, purged_walk_forward_evaluate
+from trading_lab.model_evaluation import (
+    _aggregate_profit_factor,
+    _feature_drift_diagnostics,
+    _profit_factor,
+    purged_walk_forward_evaluate,
+)
 
 
 def test_feature_drift_diagnostics_compare_chronological_session_windows():
@@ -37,6 +42,13 @@ def test_feature_drift_diagnostics_compare_chronological_session_windows():
     assert drift["recent_sessions"] == 10
     assert drift["features"]["volume_ratio"]["psi"] > 1.0
     assert "volume_ratio" in drift["high_drift_features"]
+
+
+def test_profit_factor_is_undefined_without_loss_side_evidence():
+    np = __import__("numpy")
+    assert _profit_factor(np.asarray([1.0, 2.0])) is None
+    folds = [{"models": {"candidate": {"gross_profit_r": 3.0, "gross_loss_r": 0.0}}}]
+    assert _aggregate_profit_factor(folds, "candidate") is None
 
 
 def test_v5_decision_features_are_normalized_leakage_safe_and_alias_aware():
@@ -264,7 +276,8 @@ def test_evaluation_compares_baselines_uses_holdout_and_ev_thresholds():
     assert selected["selected_sessions"] >= 20
     assert selected["session_expectancy_r"] > 0
     assert 0 < selected["selection_rate"] <= 1
-    assert selected["profit_factor"] is not None
+    assert selected["profit_factor"] is None
+    assert result["promotion_gates"]["walk_forward_profit_factor_above_1_2"] is False
     assert "max_drawdown_r" in selected
     assert selected["selected_thresholds"]
     assert any(abs(item["threshold"] - 0.5) > 0.001 for item in selected["selected_thresholds"])
