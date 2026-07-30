@@ -188,5 +188,11 @@ def test_dashboard_snapshot_includes_compact_evidence_review_status(tmp_path):
         "evaluation_status": "evaluated",
         "promotion_ready": False,
         "rows": 120,
+        "selected_model": None,
+        "walk_forward_expectancy_r": None,
+        "walk_forward_profit_factor": None,
+        "holdout_expectancy_r": None,
+        "holdout_profit_factor": None,
+        "blockers": [],
         "model_card_markdown": "model-card.md",
     }

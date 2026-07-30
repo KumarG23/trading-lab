@@ -130,6 +130,12 @@ def _load_evidence_review(evidence_status_path: str | Path | None) -> dict[str, 
         "evaluation_status": payload.get("evaluation_status"),
         "promotion_ready": bool(payload.get("promotion_ready")),
         "rows": int(payload.get("rows") or 0),
+        "selected_model": payload.get("selected_model"),
+        "walk_forward_expectancy_r": payload.get("walk_forward_expectancy_r"),
+        "walk_forward_profit_factor": payload.get("walk_forward_profit_factor"),
+        "holdout_expectancy_r": payload.get("holdout_expectancy_r"),
+        "holdout_profit_factor": payload.get("holdout_profit_factor"),
+        "blockers": list(payload.get("blockers") or []),
         "model_card_markdown": artifacts.get("model_card_markdown"),
     }
 

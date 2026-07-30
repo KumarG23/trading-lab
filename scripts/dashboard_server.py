@@ -213,10 +213,20 @@ def _evidence_review_html(review: dict) -> str:
         return '<div class="empty">No weekly evidence audit artifact yet.</div>'
     status = str(review.get("evaluation_status") or "unknown")
     promotion = "READY" if review.get("promotion_ready") else "BLOCKED"
+    selected_model = str(review.get("selected_model") or "none")
+    walk_expectancy = review.get("walk_forward_expectancy_r")
+    holdout_expectancy = review.get("holdout_expectancy_r")
+    blockers = len(review.get("blockers") or [])
+    walk_text = "n/a" if walk_expectancy is None else f"{float(walk_expectancy):+.3f}R"
+    holdout_text = "n/a" if holdout_expectancy is None else f"{float(holdout_expectancy):+.3f}R"
     return (
         '<div class="pills">'
         f'<div class="pill"><span>Evaluation</span><strong>{status}</strong></div>'
         f'<div class="pill"><span>Rows</span><strong>{int(review.get("rows") or 0)}</strong></div>'
+        f'<div class="pill"><span>Selected model</span><strong>{selected_model}</strong></div>'
+        f'<div class="pill"><span>Walk-forward</span><strong>{walk_text}</strong></div>'
+        f'<div class="pill"><span>Holdout</span><strong>{holdout_text}</strong></div>'
+        f'<div class="pill"><span>Failed gates</span><strong>{blockers}</strong></div>'
         f'<div class="pill"><span>Promotion</span><strong>{promotion}</strong></div>'
         '</div>'
     )

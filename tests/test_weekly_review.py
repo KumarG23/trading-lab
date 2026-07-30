@@ -113,6 +113,9 @@ def test_weekly_review_collects_deterministic_artifacts_and_sol_commands(tmp_pat
     assert review["mode"] == "offline_weekly_review_no_orders"
     assert review["broker_orders"] == 0
     assert review["evidence_integrity"]["verified"] is True
+    assert review["selected_model"]
+    assert review["walk_forward_expectancy_r"] is not None
+    assert isinstance(review["blockers"], list)
     assert review["artifacts"]["model_card_json"].endswith("model-card.json")
     assert (tmp_path / "processed" / "model-card.md").exists()
     assert ".venv/bin/python -m pytest tests -q" in review["sol_commands"]

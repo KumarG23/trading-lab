@@ -74,6 +74,9 @@ def collect_weekly_review(
     _atomic_write_json(artifacts["readiness"], readiness)
     _atomic_write_json(artifacts["model_card_json"], card)
     _atomic_write_text(artifacts["model_card_markdown"], render_model_card_markdown(card))
+    selected_model = str(evaluation.get("selected_model") or "")
+    selected_metrics = (evaluation.get("model_comparison") or {}).get(selected_model) or {}
+    holdout_metrics = evaluation.get("final_holdout") or {}
     review = {
         "ok": True,
         "mode": "offline_weekly_review_no_orders",
@@ -82,6 +85,12 @@ def collect_weekly_review(
         "paper_proposal_only_no_orders": True,
         "rows": len(rows),
         "evaluation_status": evaluation.get("status"),
+        "selected_model": selected_model or None,
+        "walk_forward_expectancy_r": selected_metrics.get("expectancy_r"),
+        "walk_forward_profit_factor": selected_metrics.get("profit_factor"),
+        "holdout_expectancy_r": holdout_metrics.get("expectancy_r"),
+        "holdout_profit_factor": holdout_metrics.get("profit_factor"),
+        "blockers": list(evaluation.get("blockers") or []),
         "promotion_ready": False,
         "evidence_integrity": integrity,
         "artifacts": {key: str(path) for key, path in artifacts.items()},
