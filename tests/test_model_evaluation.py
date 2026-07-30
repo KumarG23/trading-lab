@@ -259,7 +259,21 @@ def test_threshold_selection_requires_a_representative_calibration_sample():
 
     threshold = _select_threshold(rows, __import__("numpy").asarray(probabilities), minimum_selected=5)
 
-    assert threshold["calibration_selected"] >= 5
+    assert threshold["calibration_selected"] == 0
+    assert threshold["threshold"] > max(probabilities)
+
+
+def test_threshold_selection_fails_closed_when_calibration_utility_is_negative():
+    from trading_lab.model_evaluation import _select_threshold
+
+    rows = [{"outcome": {"net_r": -1.0}} for _ in range(20)]
+    scores = __import__("numpy").linspace(-0.5, 0.5, 20)
+
+    threshold = _select_threshold(rows, scores, minimum_selected=5)
+
+    assert threshold["calibration_selected"] == 0
+    assert threshold["threshold"] > max(scores)
+    assert threshold["calibration_expectancy_r"] < 0
 
 
 def test_model_evaluation_skips_when_sample_gate_is_not_met():

@@ -383,7 +383,7 @@ def _no_fill_walk_forward_evaluate(
         model = Pipeline([
             ("imputer", SimpleImputer(strategy="median", keep_empty_features=True)),
             ("scaler", StandardScaler()),
-            ("model", LogisticRegression(max_iter=1_000, random_state=17, class_weight="balanced")),
+            ("model", LogisticRegression(max_iter=1_000, random_state=17)),
         ])
         try:
             model.fit(_matrix(train, list(FEATURE_NAMES)), y_train)
@@ -418,7 +418,7 @@ def _no_fill_walk_forward_evaluate(
     return {
         "status": "evaluated" if evaluated else "skipped",
         "target": "probability_of_no_fill",
-        "model": "class_weighted_logistic",
+        "model": "logistic_base_rate_preserving",
         "split_policy": "purged_walk_forward_no_random_split",
         "samples": total,
         "no_fills": sum(int(item.get("no_fills") or 0) for item in evaluated),
@@ -662,6 +662,13 @@ def _select_threshold(
             "calibration_selected": 0,
             "calibration_expectancy_r": 0.0,
             "calibration_conservative_score": 0.0,
+        }
+    if best["calibration_expectancy_r"] <= 0 or best["calibration_conservative_score"] <= 0:
+        return {
+            "threshold": float(np.max(probabilities)) + 1e-9,
+            "calibration_selected": 0,
+            "calibration_expectancy_r": best["calibration_expectancy_r"],
+            "calibration_conservative_score": best["calibration_conservative_score"],
         }
     return best
 
