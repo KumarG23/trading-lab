@@ -120,3 +120,4 @@ def test_weekly_review_collects_deterministic_artifacts_and_sol_commands(tmp_pat
     assert (tmp_path / "processed" / "model-card.md").exists()
     assert ".venv/bin/python -m pytest tests -q" in review["sol_commands"]
     assert ".venv/bin/python -m compileall trading_lab scripts tests" in review["sol_commands"]
+    assert ".venv/bin/python scripts/run_research_experiments.py" in review["sol_commands"]

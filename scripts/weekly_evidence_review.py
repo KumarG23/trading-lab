@@ -21,6 +21,7 @@ SOL_COMMANDS = [
     ".venv/bin/python -m compileall trading_lab scripts tests",
     "git diff --check",
     ".venv/bin/python scripts/weekly_evidence_review.py --smoke",
+    ".venv/bin/python scripts/run_research_experiments.py",
 ]
 
 
