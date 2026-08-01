@@ -107,7 +107,7 @@ Sources:
 - NBER Working Paper 34861 (February 2026): https://www.nber.org/papers/w34861
 - Full paper: https://www.nber.org/system/files/working_papers/w34861/w34861.pdf
 
-Evidence tier: working-paper research with out-of-sample portfolio tests and transaction-cost analysis, not audited live results. The paper studies Chinese A-shares from 2010–2023 and reports that an end-to-end objective joining return prediction to Markowitz portfolio construction is more resilient to costs and constraints than a forecast-then-optimize mean-squared-error pipeline. No public replication repository was found in the 2026-08-01 search, so the claim remains unreplicated here.
+Evidence tier: provisional tier 4—primary working-paper research with out-of-sample portfolio tests and transaction-cost analysis, but not peer-reviewed or audited live results. The paper studies Chinese A-shares from 2010–2023 and reports that an end-to-end objective joining return prediction to Markowitz portfolio construction is more resilient to costs and constraints than a forecast-then-optimize mean-squared-error pipeline. No public replication repository was found in the 2026-08-01 search, so the claim remains unreplicated here.
 
 Transferable pattern:
 
@@ -199,7 +199,7 @@ Every research hypothesis must record:
 
 ### ATL-H-2026-08-01-01 — constrained end-to-end net-utility ranking
 
-- **Source / evidence tier:** Wang, Gao, Harvey, Liu, and Tao, NBER Working Paper 34861; tier 3 working-paper out-of-sample research with costs, not audited live evidence.
+- **Source / evidence tier:** Wang, Gao, Harvey, Liu, and Tao, NBER Working Paper 34861; provisional tier 4 primary working-paper evidence with out-of-sample tests and costs, not peer-reviewed or audited live evidence.
 - **Mechanism:** jointly select a candidate-ranking function and constrained portfolio action for expected net utility instead of minimizing prediction error and applying portfolio rules afterward.
 - **Transfer rationale:** the lab already observes multiple contemporaneous candidates, explicit fill costs, and capacity constraints, so ranking utility is closer to the actual decision than row-level classification accuracy.
 - **Required decision-time data:** v5 features and timestamps, calibrated fill probability, contemporaneous candidate groups, portfolio cash/notional/slot state, and immutable realized net R. Point-in-time catalyst/gap features remain unavailable and must not be reconstructed from hindsight.
