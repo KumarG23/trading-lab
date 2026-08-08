@@ -1,4 +1,4 @@
-# AI and Algorithmic Trading Success Patterns — 2026-08-01
+# AI and Algorithmic Trading Success Patterns — 2026-08-08
 
 Purpose: extract reproducible engineering and research patterns from credible algorithmic/ML trading work, then turn them into falsifiable Trading Lab experiments. This is not a scrapbook of return claims.
 
@@ -78,6 +78,31 @@ Trading Lab implication:
 - Continue comparing per-strategy logistic, combined logistic, gradient boosting, and expected-net-R regression.
 - Add complexity only after stable chronological improvement over simple baselines.
 - Evaluate economic utility after costs, not classification accuracy alone.
+
+### Li–Rossi–Yan–Zheng: real-time feature construction matters more than model novelty
+
+Sources:
+
+- Journal of Financial Economics article: https://www.sciencedirect.com/science/article/abs/pii/S0304405X25001461
+- Author PDF: https://www.lehigh.edu/~xuy219/research/JFE_2025.pdf
+- Official replication package: https://data.mendeley.com/datasets/vsww29gb36/2
+- Independent replication preprint: https://osf.io/preprints/socarxiv/3fh8x_v2
+
+Evidence tier: tier 3—peer-reviewed out-of-sample research with an official replication package. A 2026 independent preprint replication supports the broad feature-engineering result, but this is cross-sectional fundamental-signal research rather than audited live intraday evidence.
+
+The paper constructs real-time strategies from more than 18,000 signals available to investors. Out-of-sample results were economically meaningful but weaker than results based on ex-post curated signal sets; simple recursive ranking of signals by past performance outperformed standard ML approaches. The result is a warning against feeding a large raw feature pile to a clever model and assuming complexity will discover stable structure.
+
+Transferable pattern:
+
+- Prefer point-in-time, economically motivated transformations and relative/ranked features over unstable raw levels.
+- Compare every complex learner with transparent recursive-rank and linear baselines.
+- Treat feature-set curation as a registered hypothesis family so selection does not disappear into preprocessing.
+
+Trading Lab implication:
+
+- The current `dollar_volume_log` PSI of 0.795 is an investigation lead for a decision-time liquidity-relative feature, not permission to retrain or tune a gate.
+- Any liquidity normalization requires a new versioned corpus because v5 is immutable; the raw feature and unchanged v5 baselines must remain available.
+- Do not implement the feature until its point-in-time reference set and same-timestamp availability can be reproduced without cross-sectional hindsight.
 
 ### AQR/Jensen–Kelly–Malamud–Pedersen: optimize what can actually be implemented
 
@@ -207,6 +232,17 @@ Every research hypothesis must record:
 - **Validation:** fit only on purged chronological development folds; calibrate without overlap; compare unchanged baselines under the same top-k/capacity policy; aggregate returns by independent session; register every objective/architecture trial; score the untouched holdout once only if development expectancy is positive and sample/session gates pass.
 - **Failure criteria:** reject if development expectancy is non-positive after baseline costs, profit factor is undefined or <=1.2, fewer than 25 selections or 20 independent sessions are produced, any fold is non-positive, gains disappear under plausible costs, or improvement is concentrated in one strategy/symbol/regime.
 - **Status / 2026-08-01 result:** hypothesis recorded, implementation deferred. The existing closest proxies are already negative: cost-aware positive-utility ranking is -0.105393R over 7 selections/5 sessions, top-1-per-session is -0.459753R over 195 sessions, and all 13 registered development variants are negative. The untouched holdout remains unqueried for these variants. No additional model is justified until a simpler version demonstrates positive development utility.
+
+### ATL-H-2026-08-08-01 — point-in-time liquidity-relative feature
+
+- **Source / evidence tier:** Li, Rossi, Yan, and Zheng, Journal of Financial Economics 172 (2025), official replication code available; tier 3 peer-reviewed out-of-sample evidence. The setting is cross-sectional fundamental signals, so transfer to one-minute intraday candidates is unproven.
+- **Mechanism:** replace reliance on an unstable raw dollar-volume level with a decision-time relative-liquidity transform, such as a within-symbol rolling percentile and/or contemporaneous universe rank, while retaining the raw feature as a baseline.
+- **Transfer rationale:** v5 shows `dollar_volume_log` PSI 0.795 between 98-session chronological windows even though the ten-symbol corpus composition is reported unchanged. A relative transform may separate meaningful liquidity surprise from secular price/volume scaling, but it cannot create gross edge by itself.
+- **Required decision-time data:** completed-bar dollar volume, a strictly lagged within-symbol reference window, and—only for a cross-sectional rank—the exact universe and completed bars observable at that decision timestamp. Missing symbols and late bars require explicit sentinels; no end-of-day or full-session normalization is allowed.
+- **Costs / fills:** unchanged v5 gap-aware fill path and the same four cost scenarios. A new feature requires a separately hashed v6 corpus/manifest; v5 remains immutable and is the unchanged comparator.
+- **Validation:** first decompose PSI by symbol, price level, strategy, and calendar window without changing a model. If still justified, register one transformation before fitting, use purged chronological development folds, compare raw-only versus raw-plus-relative features with identical calibration and independent-session aggregation, and leave the untouched holdout unscored unless development gates pass.
+- **Failure criteria:** reject if point-in-time universe reconstruction is incomplete, PSI remains >=0.25 without an understood cause, development expectancy is non-positive after costs, profit factor is undefined or <=1.2, fewer than 25 selections or 20 independent sessions result, any fold is non-positive, or improvement is concentrated in one symbol/strategy/regime.
+- **Status / 2026-08-08 result:** hypothesis recorded; implementation deferred. Existing diagnostics show the drift across every strategy while ticker composition is unchanged, but they do not yet distinguish price scaling, within-symbol liquidity change, or timestamp/reference-set artifacts. No v6 corpus or model change is justified this week.
 
 ## Explicit non-lessons
 
