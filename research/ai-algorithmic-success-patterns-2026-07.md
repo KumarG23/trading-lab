@@ -1,4 +1,4 @@
-# AI and Algorithmic Trading Success Patterns — 2026-08-08
+# AI and Algorithmic Trading Success Patterns — 2026-08-15
 
 Purpose: extract reproducible engineering and research patterns from credible algorithmic/ML trading work, then turn them into falsifiable Trading Lab experiments. This is not a scrapbook of return claims.
 
@@ -108,10 +108,13 @@ Trading Lab implication:
 
 Sources:
 
-- https://www.aqr.com/Insights/Research/Working-Paper/Machine-Learning-and-the-Implementable-Efficient-Frontier
-- Published/replication references: https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4187217 and https://github.com/theisij/ml-and-the-implementable-efficient-frontier
+- Review of Financial Studies article (2026): https://academic.oup.com/rfs/advance-article/doi/10.1093/rfs/hhag022/8524346
+- Harvard Dataverse replication package: https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/GKLU6G
+- Public replication code: https://github.com/theisij/ml-and-the-implementable-efficient-frontier
 
-Core finding: cost-agnostic ML tends to chase fleeting signals and excessive turnover. Their framework optimizes portfolio decisions around net returns after transaction costs.
+Evidence tier: tier 3—peer-reviewed out-of-sample research with an official replication package. It is evidence for cost-aware portfolio design, not audited live intraday profitability.
+
+Core finding: cost-agnostic ML tends to chase fleeting signals and excessive turnover. Their framework optimizes portfolio decisions around net returns after transaction costs. The 2026 Review of Financial Studies publication and linked replication materials strengthen the methodological evidence, but do not make its asset-pricing setting automatically transferable to this small-account intraday lab.
 
 Transferable pattern:
 
@@ -124,6 +127,7 @@ Trading Lab implication:
 - Keep expected net R after modeled costs as the selection objective.
 - Add a research-only cross-sectional ranking experiment: rank contemporaneous eligible candidates by predicted net utility, apply a fixed top-k/capacity rule, and compare with absolute-threshold selection using untouched chronological tests.
 - Reject improvements that disappear under worse-but-plausible cost scenarios.
+- Do not add another allocator now: the lab's 13 registered development variants are all negative after baseline costs, so the published mechanism supports the existing falsifiable ranking hypothesis but does not justify new implementation or a holdout peek.
 
 ### Wang–Gao–Harvey–Liu–Tao: train against the implementable portfolio objective
 
