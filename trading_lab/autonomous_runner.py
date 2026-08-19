@@ -46,6 +46,7 @@ class AutonomousRunner:
         max_reviews_per_run: int | None = None,
         max_active_positions: int | None = 2,
         max_trades_per_day: int = 50,
+        portfolio_admission_enabled: bool = False,
         run_provenance: dict[str, Any] | None = None,
     ) -> None:
         self.store = store
@@ -59,6 +60,7 @@ class AutonomousRunner:
         self.create_paper_positions = create_paper_positions
         self.max_reviews_per_run = max_reviews_per_run
         self.max_active_positions = max_active_positions
+        self.portfolio_admission_enabled = portfolio_admission_enabled
         self.run_provenance = dict(run_provenance or {})
         self.run_provenance.setdefault("run_id", str(uuid4()))
         self.run_provenance.setdefault("decision_at", datetime.now(ZoneInfo("UTC")).isoformat(timespec="seconds"))
@@ -144,9 +146,15 @@ class AutonomousRunner:
                 daily_realized_loss=portfolio_daily_loss,
                 weekly_realized_loss=portfolio_weekly_loss,
             )
-            portfolio_admitted = (active_slots is None or active_slots > 0) and portfolio_decision.ok
+            portfolio_admitted = (
+                self.portfolio_admission_enabled
+                and (active_slots is None or active_slots > 0)
+                and portfolio_decision.ok
+            )
             if portfolio_admitted:
                 disposition = "admitted_portfolio"
+            elif not self.portfolio_admission_enabled:
+                disposition = "admitted_research"
             elif active_slots is not None and active_slots <= 0:
                 disposition = "slot_blocked"
             else:
@@ -164,6 +172,7 @@ class AutonomousRunner:
                     "local_worker_shadow_thesis": str(review.get("thesis") or ""),
                     "local_worker_shadow_status": str(review.get("shadow_status") or "unknown"),
                     "portfolio_admitted": portfolio_admitted,
+                    "portfolio_admission_enabled": self.portfolio_admission_enabled,
                 }
             )
             proposal_id = self.store.log_proposal(

@@ -40,6 +40,7 @@ def main() -> int:
         store=store,
         worker=worker,
         account_equity=cfg.account_equity,
+        portfolio_admission_enabled=cfg.portfolio_admission_enabled,
         run_provenance={
             "run_id": str(uuid4()),
             "decision_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -49,11 +50,21 @@ def main() -> int:
                 "no_local_ai": args.no_local_ai,
                 "account_equity": cfg.account_equity,
                 "local_model": cfg.local_model,
+                "portfolio_admission_enabled": cfg.portfolio_admission_enabled,
             }),
         },
     )
     ids = runner.process_candidates(candidates)
-    print(json.dumps({"logged_proposal_ids": ids, "input_candidates": len(candidates)}, indent=2))
+    print(
+        json.dumps(
+            {
+                "logged_proposal_ids": ids,
+                "input_candidates": len(candidates),
+                "portfolio_admission_enabled": cfg.portfolio_admission_enabled,
+            },
+            indent=2,
+        )
+    )
     return 0
 
 

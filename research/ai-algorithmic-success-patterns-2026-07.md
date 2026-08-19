@@ -248,6 +248,15 @@ Every research hypothesis must record:
 - **Failure criteria:** reject if point-in-time universe reconstruction is incomplete, PSI remains >=0.25 without an understood cause, development expectancy is non-positive after costs, profit factor is undefined or <=1.2, fewer than 25 selections or 20 independent sessions result, any fold is non-positive, or improvement is concentrated in one symbol/strategy/regime.
 - **Status / 2026-08-08 result:** hypothesis recorded; implementation deferred. Existing diagnostics show the drift across every strategy while ticker composition is unchanged, but they do not yet distinguish price scaling, within-symbol liquidity change, or timestamp/reference-set artifacts. No v6 corpus or model change is justified this week.
 
+## Current champion/challenger state — 2026-08-18
+
+Full trader/firm comparison and V2 operating design: `research/successful-traders-ai-and-v2-system-2026-08-18.md`.
+
+- **Frozen champion/control:** V1 ORB, VWAP trend/imbalance, VWAP reclaim, and momentum suite. It remains a research control; new portfolio admission is disabled by default.
+- **Active challenger:** `ATL-H-2026-08-18-01`, point-in-time stocks-in-play scanner context for ORB/momentum. Forward data collection only; no filtering or promotion until at least 100 independent observations across 20 sessions and preregistered net-expectancy/profit-factor/concentration/cost gates pass.
+- **One active challenger at a time:** queued mechanisms remain unimplemented until the active challenger resolves or a documented data-quality blocker forces a no-op redesign.
+- Continuous improvement means weekly evidence review and controlled challenger replacement—not weekly mutation of strategy rules.
+
 ## Explicit non-lessons
 
 - A profitable fund does not prove its exact edge is public or transferable.

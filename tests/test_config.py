@@ -10,6 +10,13 @@ def test_lab_config_defaults_to_paper_and_local_worker():
     assert cfg.local_model == "ggml-org/gpt-oss-120b-GGUF"
     assert cfg.escalation_provider == "codex"
     assert cfg.live_trading_enabled is False
+    assert cfg.portfolio_admission_enabled is False
+
+
+def test_lab_config_can_explicitly_enable_portfolio_admission():
+    cfg = LabConfig.from_env({"TRADING_LAB_PORTFOLIO_ADMISSION_ENABLED": "true"})
+
+    assert cfg.portfolio_admission_enabled is True
 
 
 def test_lab_config_reads_alpaca_paper_credentials_without_enabling_live():

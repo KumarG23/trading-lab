@@ -51,7 +51,12 @@ def _good_candidate(ticker="AAPL"):
 def test_autonomous_runner_persists_every_generated_candidate_event(tmp_path):
     store = JournalStore(tmp_path / "lab.db")
     worker = FakeWorker()
-    runner = AutonomousRunner(store=store, worker=worker, account_equity=1000)
+    runner = AutonomousRunner(
+        store=store,
+        worker=worker,
+        account_equity=1000,
+        portfolio_admission_enabled=True,
+    )
     rejected = _good_candidate("DOGE-USD")
     rejected["asset_class"] = "crypto"
 
@@ -229,7 +234,13 @@ def test_autonomous_runner_caps_model_reviews_without_capping_candidate_capture(
 def test_autonomous_runner_tracks_all_research_candidates_but_caps_portfolio_admission(tmp_path):
     store = JournalStore(tmp_path / "lab.db")
     worker = FakeWorker()
-    runner = AutonomousRunner(store=store, worker=worker, account_equity=1000, max_active_positions=1)
+    runner = AutonomousRunner(
+        store=store,
+        worker=worker,
+        account_equity=1000,
+        max_active_positions=1,
+        portfolio_admission_enabled=True,
+    )
 
     ids = runner.process_candidates([_good_candidate("AAPL"), _good_candidate("MSFT")])
 
@@ -239,6 +250,25 @@ def test_autonomous_runner_tracks_all_research_candidates_but_caps_portfolio_adm
     assert len(store.list_active_paper_positions()) == 2
     assert [proposal["rule_checklist"]["portfolio_admitted"] for proposal in proposals] == [True, False]
     assert [event["disposition"] for event in store.list_candidate_events()] == ["admitted_portfolio", "slot_blocked"]
+
+
+def test_autonomous_runner_defaults_to_frozen_portfolio_admission_without_stopping_research(tmp_path):
+    store = JournalStore(tmp_path / "lab.db")
+    worker = FakeWorker()
+    runner = AutonomousRunner(
+        store=store,
+        worker=worker,
+        account_equity=1000,
+        max_active_positions=2,
+    )
+
+    ids = runner.process_candidates([_good_candidate("AAPL"), _good_candidate("MSFT")])
+
+    proposals = store.list_proposals()
+    assert len(ids) == 2
+    assert len(store.list_active_paper_positions()) == 2
+    assert [proposal["rule_checklist"]["portfolio_admitted"] for proposal in proposals] == [False, False]
+    assert [event["disposition"] for event in store.list_candidate_events()] == ["admitted_research", "admitted_research"]
 
 
 def test_autonomous_runner_prioritizes_underrepresented_strategy(tmp_path):
@@ -255,7 +285,13 @@ def test_autonomous_runner_prioritizes_underrepresented_strategy(tmp_path):
         rule_checklist={},
     )
     worker = FakeWorker()
-    runner = AutonomousRunner(store=store, worker=worker, account_equity=1000, max_active_positions=1)
+    runner = AutonomousRunner(
+        store=store,
+        worker=worker,
+        account_equity=1000,
+        max_active_positions=1,
+        portfolio_admission_enabled=True,
+    )
     orb = _good_candidate("MSFT")
     reclaim = _good_candidate("QQQ")
     reclaim["strategy_id"] = "vwap-reclaim"

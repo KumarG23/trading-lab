@@ -29,6 +29,13 @@ def test_generate_strategy_candidates_combines_orb_and_vwap_when_enabled():
         enabled_strategies=["orb", "vwap"],
         risk_dollars=2.0,
         opening_range_minutes=5,
+        scanner_context={
+            "QQQ": {
+                "scanner_score": 77.5,
+                "scanner_rank": 2,
+                "scanner_generated_at": "2026-06-29T09:05:00-04:00",
+            }
+        },
     )
 
     assert {candidate["strategy_id"] for candidate in candidates} == {
@@ -40,6 +47,8 @@ def test_generate_strategy_candidates_combines_orb_and_vwap_when_enabled():
         assert context["current_volume"] > 0
         assert context["dollar_volume"] > 0
         assert context["range_pct"] > 0
+        assert context["scanner_score"] == 77.5
+        assert context["scanner_rank"] == 2
         assert "market_return" in context
     assert {candidate["market_context"]["regime"] for candidate in candidates} == {"unknown"}
 

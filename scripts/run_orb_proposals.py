@@ -27,7 +27,7 @@ from trading_lab.run_telemetry import write_run_telemetry  # noqa: E402
 from trading_lab.strategy_suite import generate_strategy_candidates  # noqa: E402
 from trading_lab.training_export import export_training_examples  # noqa: E402
 from trading_lab.training_memory import TrainingMemory  # noqa: E402
-from trading_lab.watchlist import load_symbols  # noqa: E402
+from trading_lab.watchlist import load_scanner_context, load_symbols  # noqa: E402
 
 ET = ZoneInfo("America/New_York")
 DEFAULT_WATCHLIST = ["AAPL", "MSFT", "NVDA", "AMD", "TSLA", "META", "AMZN", "GOOGL", "SPY", "QQQ"]
@@ -71,6 +71,7 @@ def main() -> int:
         return 0
 
     symbols = load_symbols(args.symbols, watchlist_file=args.watchlist_file)
+    scanner_context = load_scanner_context(args.watchlist_file, decision_at=now_et)
     calendar = XNYSCalendar()
     market_open_et, _market_close_et = calendar.session_bounds(now_et.date())
     no_new_entries_after, flatten_at = lifecycle_cutoffs(calendar, now_et.date())
@@ -115,6 +116,7 @@ def main() -> int:
         account_equity=cfg.account_equity,
         live_latest_only=True,
         require_bullish_market_regime=args.bullish_regime_filter,
+        scanner_context=scanner_context,
     )
     if not entry_window_open(now_et, no_new_entries_after):
         candidates = []
@@ -136,6 +138,7 @@ def main() -> int:
         "bullish_regime_filter": args.bullish_regime_filter,
         "max_reviews_per_run": args.max_reviews_per_run,
         "max_active_positions": args.max_active_positions,
+        "portfolio_admission_enabled": cfg.portfolio_admission_enabled,
         "max_trades_per_day": args.max_trades_per_day,
         "entry_slippage_bps": args.entry_slippage_bps,
         "exit_slippage_bps": args.exit_slippage_bps,
@@ -147,6 +150,7 @@ def main() -> int:
         account_equity=cfg.account_equity,
         max_reviews_per_run=args.max_reviews_per_run,
         max_active_positions=args.max_active_positions,
+        portfolio_admission_enabled=cfg.portfolio_admission_enabled,
         max_trades_per_day=args.max_trades_per_day,
         run_provenance={
             "run_id": str(uuid4()),
@@ -184,12 +188,14 @@ def main() -> int:
         "strategies": strategies,
         "bullish_regime_filter": args.bullish_regime_filter,
         "symbols": symbols,
+        "scanner_context_symbols": len(scanner_context),
         "bars": len(bars),
         "data_quality": data_quality,
         "session_cutoffs": {"no_new_entries_after": no_new_entries_after, "flatten_at": flatten_at},
         "candidates": len(candidates),
         "max_reviews_per_run": args.max_reviews_per_run,
         "max_active_positions": args.max_active_positions,
+        "portfolio_admission_enabled": cfg.portfolio_admission_enabled,
         "max_trades_per_day": args.max_trades_per_day,
         "fill_costs": {
             "entry_slippage_bps": args.entry_slippage_bps,

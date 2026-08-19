@@ -23,6 +23,7 @@ def generate_strategy_candidates(
     max_position_notional_pct: float = 2.0,
     live_latest_only: bool = False,
     require_bullish_market_regime: bool = False,
+    scanner_context: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     enabled = {strategy.strip().lower() for strategy in enabled_strategies}
     candidates: list[dict[str, Any]] = []
@@ -72,6 +73,8 @@ def generate_strategy_candidates(
         context = dict(candidate.get("market_context") or {})
         context["regime"] = regime
         _enrich_decision_context(candidate, context, bars)
+        symbol_context = (scanner_context or {}).get(str(candidate.get("ticker") or "").upper(), {})
+        context.update({key: value for key, value in symbol_context.items() if key.startswith("scanner_")})
         candidate["market_context"] = context
 
     return _cap_risk_for_notional(

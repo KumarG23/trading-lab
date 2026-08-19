@@ -17,6 +17,7 @@ class LabConfig:
     alpaca_secret_key: str | None
     alpaca_base_url: str
     live_trading_enabled: bool
+    portfolio_admission_enabled: bool
 
     @property
     def alpaca_configured(self) -> bool:
@@ -40,6 +41,7 @@ class LabConfig:
             alpaca_secret_key=env.get("ALPACA_SECRET_KEY"),
             alpaca_base_url=env.get("ALPACA_BASE_URL", "https://paper-api.alpaca.markets"),
             live_trading_enabled=live_enabled,
+            portfolio_admission_enabled=_truthy(env.get("TRADING_LAB_PORTFOLIO_ADMISSION_ENABLED")),
         )
 
     @classmethod
