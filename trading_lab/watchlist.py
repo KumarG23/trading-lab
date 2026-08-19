@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from trading_lab.universe_scanner import scanner_content_sha256
+
 ET = ZoneInfo("America/New_York")
 
 
@@ -38,16 +40,43 @@ def load_scanner_context(
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
         generated_at = datetime.fromisoformat(str(payload["generated_at"]).replace("Z", "+00:00"))
+        data_cutoff_at = datetime.fromisoformat(str(payload["data_cutoff_at"]).replace("Z", "+00:00"))
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
         return {}
-    if generated_at.tzinfo is None or generated_at.utcoffset() is None:
+    if (
+        generated_at.tzinfo is None
+        or generated_at.utcoffset() is None
+        or data_cutoff_at.tzinfo is None
+        or data_cutoff_at.utcoffset() is None
+    ):
         return {}
     generated_et = generated_at.astimezone(ET)
+    cutoff_et = data_cutoff_at.astimezone(ET)
     decision_et = decision_at.astimezone(ET)
-    if generated_et.date() != decision_et.date() or generated_et > decision_et:
+    if (
+        generated_et.date() != decision_et.date()
+        or cutoff_et.date() != decision_et.date()
+        or data_cutoff_at > generated_at
+        or generated_at > decision_at
+        or data_cutoff_at > decision_at
+    ):
         return {}
     rows = payload.get("top_matches")
-    if not isinstance(rows, list):
+    watchlist = payload.get("watchlist")
+    content_hash = str(payload.get("scanner_content_sha256") or "")
+    if not isinstance(rows, list) or not isinstance(watchlist, list):
+        return {}
+    if len(content_hash) != 64 or any(char not in "0123456789abcdef" for char in content_hash):
+        return {}
+    try:
+        expected_hash = scanner_content_sha256(
+            rows=rows,
+            watchlist=[str(symbol) for symbol in watchlist],
+            data_cutoff_at=data_cutoff_at,
+        )
+    except (TypeError, ValueError):
+        return {}
+    if expected_hash != content_hash:
         return {}
     context: dict[str, dict[str, Any]] = {}
     for rank, row in enumerate(rows, start=1):
@@ -58,6 +87,8 @@ def load_scanner_context(
             continue
         context[symbol] = {
             "scanner_generated_at": generated_at.isoformat(),
+            "scanner_data_cutoff_at": data_cutoff_at.isoformat(),
+            "scanner_content_sha256": content_hash,
             "scanner_rank": rank,
             "scanner_score": _finite_number(row.get("score")),
             "scanner_change_pct": _finite_number(row.get("change_pct")),

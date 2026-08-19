@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from collections import defaultdict
+from datetime import datetime, timezone
 from statistics import mean
 from typing import Any
 
@@ -20,6 +23,51 @@ DEFAULT_SCAN_UNIVERSE = [
     # ETFs useful for regime / volatility context
     "TQQQ", "SQQQ", "SOXL", "SOXS", "ARKK", "XLF", "XLE", "XLK", "XBI", "KRE", "VXX",
 ]
+
+
+def completed_bar_cutoff(now: datetime) -> datetime:
+    """Return the start of the current minute; bars at/after it are incomplete."""
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("now must be timezone-aware")
+    return now.astimezone(timezone.utc).replace(second=0, microsecond=0)
+
+
+def filter_bars_before_cutoff(
+    bars: list[dict[str, Any]],
+    *,
+    cutoff: datetime,
+) -> list[dict[str, Any]]:
+    if cutoff.tzinfo is None or cutoff.utcoffset() is None:
+        raise ValueError("cutoff must be timezone-aware")
+    cutoff_utc = cutoff.astimezone(timezone.utc)
+    filtered: list[dict[str, Any]] = []
+    for bar in bars:
+        try:
+            timestamp = datetime.fromisoformat(str(bar["timestamp"]).replace("Z", "+00:00"))
+        except (KeyError, TypeError, ValueError):
+            continue
+        if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+            continue
+        if timestamp.astimezone(timezone.utc) < cutoff_utc:
+            filtered.append(bar)
+    return filtered
+
+
+def scanner_content_sha256(
+    *,
+    rows: list[dict[str, Any]],
+    watchlist: list[str],
+    data_cutoff_at: datetime,
+) -> str:
+    if data_cutoff_at.tzinfo is None or data_cutoff_at.utcoffset() is None:
+        raise ValueError("data_cutoff_at must be timezone-aware")
+    payload = {
+        "data_cutoff_at": data_cutoff_at.astimezone(timezone.utc).isoformat(timespec="seconds"),
+        "rows": rows,
+        "watchlist": watchlist,
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def score_universe(

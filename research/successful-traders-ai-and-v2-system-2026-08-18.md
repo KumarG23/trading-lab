@@ -218,11 +218,16 @@ This does not enable broker orders. The lab remains `paper_proposal_only_no_orde
 
 The proposal loop now accepts scanner metadata only when:
 
-- the scanner snapshot is from the same Eastern trading session;
-- its timestamp is not later than the decision;
+- both the snapshot creation time and completed-bar data cutoff are timezone-aware;
+- both timestamps are from the same Eastern trading session as the decision;
+- neither timestamp is later than the decision;
+- the data cutoff is not later than snapshot creation;
+- a recomputed SHA-256 of the cutoff, ranked rows, and watchlist matches the artifact;
 - fields are namespaced with `scanner_`.
 
-Captured fields include scanner score/rank, move, relative volume, dollar volume, range, price, and snapshot timestamp. `scanner_score`, already present in the v5 feature contract, can now become populated in forward evidence without modifying immutable historical data. Other fields remain provenance for a separately versioned future corpus.
+Captured fields include scanner score/rank, move, relative volume, dollar volume, range, price, snapshot timestamp, completed-bar cutoff, and content hash. The producer floors its request to the current minute boundary and discards bars at or after that boundary, preventing an in-progress minute from entering the score. `scanner_score`, already present in the v5 feature contract, can now become populated in forward evidence without modifying immutable historical data. Other fields remain provenance for a separately versioned future corpus.
+
+Scanner provenance is retained on every generated strategy candidate so the immutable control ledger has a consistent point-in-time annotation. The preregistered primary analysis cohort for `ATL-H-2026-08-18-01` is ORB and momentum only; VWAP cohorts are exploratory diagnostics and cannot satisfy this challenger's promotion gate.
 
 This is intentionally data capture, not a favorable filter. Filtering immediately would select on an unvalidated feature and contaminate the forward comparison.
 

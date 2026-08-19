@@ -13,7 +13,16 @@ sys.path.insert(0, str(ROOT))
 
 from trading_lab.alpaca_client import AlpacaClient  # noqa: E402
 from trading_lab.config import LabConfig  # noqa: E402
-from trading_lab.universe_scanner import CORE_SYMBOLS, DEFAULT_SCAN_UNIVERSE, filter_stocks_in_play, pick_watchlist, score_universe  # noqa: E402
+from trading_lab.universe_scanner import (  # noqa: E402
+    CORE_SYMBOLS,
+    DEFAULT_SCAN_UNIVERSE,
+    completed_bar_cutoff,
+    filter_bars_before_cutoff,
+    filter_stocks_in_play,
+    pick_watchlist,
+    scanner_content_sha256,
+    score_universe,
+)
 
 ET = ZoneInfo("America/New_York")
 DEFAULT_OUTPUT = ROOT / "data" / "processed" / "scanner-watchlist.json"
@@ -38,7 +47,7 @@ def main() -> int:
         print(json.dumps({"ok": False, "error": "live_trading_enabled_refused_by_universe_scanner"}, indent=2))
         return 3
     symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
-    end_dt = datetime.now(timezone.utc)
+    end_dt = completed_bar_cutoff(datetime.now(timezone.utc))
     start_dt = end_dt - timedelta(days=args.days)
     client = AlpacaClient(base_url=cfg.alpaca_base_url, api_key=cfg.alpaca_api_key or "", secret_key=cfg.alpaca_secret_key or "")
     bars = client.fetch_stock_bars(
@@ -48,6 +57,7 @@ def main() -> int:
         end=end_dt.isoformat(timespec="seconds").replace("+00:00", "Z"),
         batch_size=1,
     )
+    bars = filter_bars_before_cutoff(bars, cutoff=end_dt)
     scored = score_universe(
         bars,
         symbols=symbols,
@@ -57,16 +67,24 @@ def main() -> int:
     )
     stocks_in_play = filter_stocks_in_play(scored)
     watchlist = pick_watchlist(stocks_in_play, core_symbols=CORE_SYMBOLS, max_symbols=args.max_symbols)
+    top_matches = scored[:30]
+    content_hash = scanner_content_sha256(
+        rows=top_matches,
+        watchlist=watchlist,
+        data_cutoff_at=end_dt,
+    )
     payload = {
         "ok": True,
         "mode": "dynamic_universe_scan_no_orders",
         "generated_at": datetime.now(ET).isoformat(timespec="seconds"),
+        "data_cutoff_at": end_dt.isoformat(timespec="seconds"),
+        "scanner_content_sha256": content_hash,
         "period": {"start": start_dt.astimezone(ET).isoformat(timespec="seconds"), "end": end_dt.astimezone(ET).isoformat(timespec="seconds")},
         "scan_universe_count": len(symbols),
         "bars": len(bars),
         "watchlist": watchlist,
         "stocks_in_play_count": len(stocks_in_play),
-        "top_matches": scored[:30],
+        "top_matches": top_matches,
         "filters": {
             "min_price": args.min_price,
             "max_price": args.max_price,

@@ -1,4 +1,14 @@
-from trading_lab.universe_scanner import DEFAULT_SCAN_UNIVERSE, filter_stocks_in_play, pick_watchlist, score_universe
+from datetime import datetime, timezone
+
+from trading_lab.universe_scanner import (
+    DEFAULT_SCAN_UNIVERSE,
+    completed_bar_cutoff,
+    filter_bars_before_cutoff,
+    filter_stocks_in_play,
+    pick_watchlist,
+    scanner_content_sha256,
+    score_universe,
+)
 
 
 def _bar(symbol, day, minute, close, volume=1000):
@@ -61,3 +71,42 @@ def test_default_scan_universe_contains_more_than_large_cap_megafaang():
     assert len(DEFAULT_SCAN_UNIVERSE) >= 75
     for symbol in ["SOFI", "HOOD", "RKLB", "IONQ", "OPEN", "PLTR"]:
         assert symbol in DEFAULT_SCAN_UNIVERSE
+
+
+def test_completed_bar_cutoff_excludes_the_in_progress_minute():
+    now = datetime(2026, 8, 18, 13, 5, 44, tzinfo=timezone.utc)
+
+    cutoff = completed_bar_cutoff(now)
+
+    assert cutoff == datetime(2026, 8, 18, 13, 5, tzinfo=timezone.utc)
+
+
+def test_filter_bars_before_cutoff_rejects_the_cutoff_minute_and_bad_timestamps():
+    cutoff = datetime(2026, 8, 18, 13, 5, tzinfo=timezone.utc)
+    bars = [
+        {"symbol": "NVDA", "timestamp": "2026-08-18T13:04:00Z"},
+        {"symbol": "NVDA", "timestamp": "2026-08-18T13:05:00Z"},
+        {"symbol": "NVDA", "timestamp": "not-a-time"},
+    ]
+
+    filtered = filter_bars_before_cutoff(bars, cutoff=cutoff)
+
+    assert filtered == [bars[0]]
+
+
+def test_scanner_content_hash_is_stable_and_sensitive_to_cutoff():
+    rows = [{"symbol": "NVDA", "score": 71.2}]
+    watchlist = ["SPY", "NVDA"]
+    cutoff = datetime(2026, 8, 18, 13, 5, tzinfo=timezone.utc)
+
+    first = scanner_content_sha256(rows=rows, watchlist=watchlist, data_cutoff_at=cutoff)
+    second = scanner_content_sha256(rows=rows, watchlist=watchlist, data_cutoff_at=cutoff)
+    changed = scanner_content_sha256(
+        rows=rows,
+        watchlist=watchlist,
+        data_cutoff_at=datetime(2026, 8, 18, 13, 6, tzinfo=timezone.utc),
+    )
+
+    assert len(first) == 64
+    assert first == second
+    assert first != changed
