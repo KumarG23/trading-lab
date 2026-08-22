@@ -1,4 +1,4 @@
-# AI and Algorithmic Trading Success Patterns — 2026-08-15
+# AI and Algorithmic Trading Success Patterns — 2026-08-22
 
 Purpose: extract reproducible engineering and research patterns from credible algorithmic/ML trading work, then turn them into falsifiable Trading Lab experiments. This is not a scrapbook of return claims.
 
@@ -150,6 +150,28 @@ Trading Lab implication:
 - Do not add an end-to-end neural allocator while every registered development policy remains negative after costs; model complexity cannot resurrect missing gross edge.
 - If revisited, compare it with unchanged always-admit, logistic, expected-net-R regression, and top-k baselines under identical chronology, costs, no-fill treatment, and capacity.
 
+### He–Lv–Manela–Wu: text models used in backtests must be point-in-time too
+
+Sources:
+
+- Primary paper: https://arxiv.org/abs/2502.21206
+- Full HTML: https://arxiv.org/html/2502.21206
+- Released model/inference repository: https://github.com/LinyingLyu/ChronoGPT
+
+Evidence tier: provisional tier 4—primary working-paper evidence with expanding-window out-of-sample prediction and released model artifacts, but no peer review, audited live results, or transaction-cost model. The paper uses Dow Jones Newswire display timestamps, yearly model vintages trained only on text available by each cutoff, ridge regressions fit through the prior month, and daily equal-weight long-short decile portfolios from 2008–2023. Its reported Sharpe ratios are gross research results in a daily cross-sectional setting, not executable evidence for this long-only intraday lab.
+
+Transferable pattern:
+
+- Point-in-time news timestamps do not cure leakage if the embedding model itself was trained on future text.
+- Preserve both source availability time and model-training cutoff for every text-derived feature.
+- Treat the language model as a frozen feature transform; fit and select the downstream predictor only on prior chronological evidence.
+
+Trading Lab implication:
+
+- Any catalyst/news challenger needs a provider timestamp, ingestion timestamp, completed-bar decision cutoff, immutable content hash, and a model/version whose training cutoff predates the decision.
+- A current general-purpose LLM may summarize forward-collected news after the fact, but it cannot create defensible historical predictive features unless its temporal knowledge boundary is proven.
+- Do not implement this mechanism now: the active scanner-context challenger is still collecting forward evidence, the historical corpus has no point-in-time catalyst feed, and the paper omits costs and studies a different horizon/portfolio construction problem.
+
 ### DeepLOB: deep models can predict order-book movement, but execution assumptions dominate
 
 Sources:
@@ -247,6 +269,17 @@ Every research hypothesis must record:
 - **Validation:** first decompose PSI by symbol, price level, strategy, and calendar window without changing a model. If still justified, register one transformation before fitting, use purged chronological development folds, compare raw-only versus raw-plus-relative features with identical calibration and independent-session aggregation, and leave the untouched holdout unscored unless development gates pass.
 - **Failure criteria:** reject if point-in-time universe reconstruction is incomplete, PSI remains >=0.25 without an understood cause, development expectancy is non-positive after costs, profit factor is undefined or <=1.2, fewer than 25 selections or 20 independent sessions result, any fold is non-positive, or improvement is concentrated in one symbol/strategy/regime.
 - **Status / 2026-08-08 result:** hypothesis recorded; implementation deferred. Existing diagnostics show the drift across every strategy while ticker composition is unchanged, but they do not yet distinguish price scaling, within-symbol liquidity change, or timestamp/reference-set artifacts. No v6 corpus or model change is justified this week.
+
+### ATL-H-2026-08-22-01 — chronologically consistent catalyst embedding
+
+- **Source / evidence tier:** He, Lv, Manela, and Wu, *Chronologically Consistent Large Language Models*, arXiv:2502.21206v3; provisional tier 4 working-paper evidence with expanding-window out-of-sample tests and released model artifacts, but no peer review, audited live record, or modeled transaction costs.
+- **Mechanism:** encode timestamped company news with a frozen language model trained only on text available before the decision, then test whether the embedding adds net-R ranking value beyond scanner context and transparent catalyst indicators.
+- **Transfer rationale:** the active stocks-in-play challenger needs point-in-time catalyst context, and the paper demonstrates why news timestamps alone are insufficient when the text model has future knowledge. The paper's daily long-short cross-section is not evidence that the mechanism transfers to small-account intraday long candidates.
+- **Required decision-time data:** licensed or otherwise reproducible company-news content with provider display time and local ingestion time; ticker linkage known at that time; decision/data cutoff; immutable content hash; frozen model ID, weights hash, and pre-decision training cutoff; explicit missing/no-news sentinels. No reconstructed historical headlines or later-edited article text.
+- **Costs / fills:** unchanged gap-aware fill path; primary 5 bps entry, 10 bps exit, and $0.005/share/side costs plus the existing zero-explicit-fee, diagnostic zero-friction, and double-slippage scenarios. News/licensing and inference latency must be reported separately.
+- **Validation:** queue behind `ATL-H-2026-08-18-01`; first collect forward-only annotations without filtering. Preregister one transparent catalyst baseline and one frozen-embedding challenger, use purged chronological development folds and independent-session aggregation, compare under identical candidates/costs/fills, and leave the final holdout untouched until development gates pass.
+- **Failure criteria:** reject if timestamps/model cutoff/content identity cannot be proven; fewer than 100 independent observations or 20 sessions are available; development expectancy is non-positive after costs; profit factor is undefined or <=1.2; any fold is non-positive; no improvement over the transparent catalyst baseline; or gains concentrate in one symbol, strategy, provider, or event class.
+- **Status / 2026-08-22 result:** hypothesis recorded and deferred. No code, corpus, model, or strategy change is justified while the existing scanner-context challenger is active and point-in-time catalyst data is absent.
 
 ## Current champion/challenger state — 2026-08-18
 
