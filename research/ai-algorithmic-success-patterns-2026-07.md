@@ -1,4 +1,4 @@
-# AI and Algorithmic Trading Success Patterns — 2026-08-22
+# AI and Algorithmic Trading Success Patterns — 2026-08-29
 
 Purpose: extract reproducible engineering and research patterns from credible algorithmic/ML trading work, then turn them into falsifiable Trading Lab experiments. This is not a scrapbook of return claims.
 
@@ -172,6 +172,31 @@ Trading Lab implication:
 - A current general-purpose LLM may summarize forward-collected news after the fact, but it cannot create defensible historical predictive features unless its temporal knowledge boundary is proven.
 - Do not implement this mechanism now: the active scanner-context challenger is still collecting forward evidence, the historical corpus has no point-in-time catalyst feed, and the paper omits costs and studies a different horizon/portfolio construction problem.
 
+### Kull–Silva Filho–Flach: calibrate rare-event probabilities on disjoint evidence
+
+Sources:
+
+- AISTATS paper and proceedings record: https://proceedings.mlr.press/v54/kull17a.html
+- Electronic Journal of Statistics extension: https://doi.org/10.1214/17-EJS1338SI
+- Authors' implementation: https://github.com/betacal/python
+- Brier-score interpretation audit: https://doi.org/10.1016/j.gloepi.2025.100242
+
+Evidence tier: tier 4 for this lab—peer-reviewed methodological evidence with public code and out-of-sample benchmark experiments, but no financial return, transaction-cost, execution, or audited-live evidence.
+
+The beta-calibration work derives a post-hoc binary-probability map that contains the identity function and is more flexible than a logistic/Platt sigmoid. The authors report benchmark gains over logistic calibration for several distorted classifier families and caution that non-parametric isotonic calibration can overfit smaller calibration sets. Hoessly's later Brier-score analysis independently reinforces two guardrails already relevant here: compare Brier scores only on the same population against a prevalence baseline, and do not treat Brier score alone as a calibration diagnostic.
+
+Transferable pattern:
+
+- Fit any post-hoc calibrator on a chronological calibration segment disjoint from base-model fitting and testing.
+- Compare calibrated, uncalibrated, and constant-prevalence forecasts on exactly the same rows.
+- Report Brier score with log loss, calibration intercept/slope, event count, and session count; a rare-event Brier delta without those denominators is not evidence of operational value.
+
+Trading Lab implication:
+
+- The current no-fill logistic model fails its base-rate gate by a hair in both walk-forward evidence (Brier 0.017434 versus 0.017424) and the existing final holdout (0.012218 versus 0.012120). That is a failed gate, not a mandate to tune until green.
+- A beta-calibration challenger is a valid registered diagnostic hypothesis, but it must not reuse test rows for calibration or turn the already-observed final holdout into a tuning set.
+- Defer implementation while the scanner-context challenger is active and require a later forward confirmation period before any no-fill model can affect readiness.
+
 ### DeepLOB: deep models can predict order-book movement, but execution assumptions dominate
 
 Sources:
@@ -246,6 +271,10 @@ Every research hypothesis must record:
    - Measure prediction and outcome correlation among ORB, VWAP trend, VWAP reclaim, and momentum pullback.
    - Test whether any ensemble improves net utility across independent sessions rather than merely multiplying the same market move.
 
+5. **Rare-event no-fill calibration audit**
+   - Compare the unchanged no-fill logistic model, constant training-prevalence baseline, and one preregistered beta calibrator on identical chronological folds.
+   - Keep it diagnostic-only until it improves both proper scores on development evidence and confirms on a later forward period.
+
 ## Hypothesis ledger
 
 ### ATL-H-2026-08-01-01 — constrained end-to-end net-utility ranking
@@ -280,6 +309,17 @@ Every research hypothesis must record:
 - **Validation:** queue behind `ATL-H-2026-08-18-01`; first collect forward-only annotations without filtering. Preregister one transparent catalyst baseline and one frozen-embedding challenger, use purged chronological development folds and independent-session aggregation, compare under identical candidates/costs/fills, and leave the final holdout untouched until development gates pass.
 - **Failure criteria:** reject if timestamps/model cutoff/content identity cannot be proven; fewer than 100 independent observations or 20 sessions are available; development expectancy is non-positive after costs; profit factor is undefined or <=1.2; any fold is non-positive; no improvement over the transparent catalyst baseline; or gains concentrate in one symbol, strategy, provider, or event class.
 - **Status / 2026-08-22 result:** hypothesis recorded and deferred. No code, corpus, model, or strategy change is justified while the existing scanner-context challenger is active and point-in-time catalyst data is absent.
+
+### ATL-H-2026-08-29-01 — chronological beta calibration for no-fill risk
+
+- **Source / evidence tier:** Kull, Silva Filho, and Flach, AISTATS 2017 / Electronic Journal of Statistics 2017 with official code; tier 4 methodological evidence for this lab because it contains no trading execution or live-return result. Hoessly, *Global Epidemiology* 11 (2026), DOI `10.1016/j.gloepi.2025.100242`, supports same-population Brier/base-rate comparisons and separate calibration diagnostics.
+- **Mechanism:** fit a three-parameter beta map to raw no-fill probabilities using only a disjoint chronological calibration segment, allowing asymmetric correction while preserving the identity map as a possible solution.
+- **Transfer rationale:** no-fill is rare and the current logistic model is marginally worse than constant training prevalence: walk-forward Brier 0.017434 versus 0.017424 and existing-holdout Brier 0.012218 versus 0.012120. Better calibrated fill probabilities could eventually improve cost-aware ranking, but calibration cannot create strategy edge.
+- **Required decision-time data:** unchanged v5 decision features, fill/no-fill labels from the shared gap-aware outcome engine, session timestamps, and fold-local training prevalence. No broker, order, account, or post-decision feature is permitted.
+- **Costs / fills:** preserve the immutable v5 fill path and all existing cost scenarios. This hypothesis changes probability diagnostics only; it must not alter fills, candidate admission, costs, strategy rules, or promotion thresholds.
+- **Validation:** preregister exactly one beta-calibration form; fit the base model on each fit window and the calibrator on the following disjoint calibration window; compare beta-calibrated, raw-logistic, and constant-prevalence probabilities on the same next-session tests. Report Brier score, log loss, calibration intercept/slope, no-fill events, and independent sessions. Do not score a final confirmation period unless development improves both Brier and log loss without material fold instability.
+- **Failure criteria:** reject if any fit/calibration/test overlap exists; either development proper score fails to beat both baselines; improvement reverses in more than one fold; event/session counts are insufficient for stable calibration; gains depend on one strategy, symbol, or period; or the later forward confirmation fails either proper-score comparison.
+- **Status / 2026-08-29 result:** hypothesis recorded and queued, not implemented. The target delta is tiny, the existing final holdout summary is already known, and adding a calibrator immediately after observing the failed gate would invite selection bias. Keep the current model fail-closed and collect a later forward confirmation period before implementation or holdout scoring.
 
 ## Current champion/challenger state — 2026-08-18
 
