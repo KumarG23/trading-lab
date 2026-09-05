@@ -60,8 +60,10 @@ def liquidity_drift_experiment(
     window = max(1, min(len(sessions) // 2, int(round(len(sessions) * window_fraction))))
     early = [row for session in sessions[:window] for row in by_session[session]]
     recent = [row for session in sessions[-window:] for row in by_session[session]]
-    early_values = _finite_feature_values(early, "dollar_volume_log")
-    recent_values = _finite_feature_values(recent, "dollar_volume_log")
+    early_all_values = _feature_values(early, "dollar_volume_log")
+    recent_all_values = _feature_values(recent, "dollar_volume_log")
+    early_values = _finite_values(early_all_values)
+    recent_values = _finite_values(recent_all_values)
     early_top = _top_tickers(early)
     recent_top = _top_tickers(recent)
     return {
@@ -74,7 +76,9 @@ def liquidity_drift_experiment(
         "dollar_volume_log": {
             "early_median": round(float(median(early_values)), 6) if early_values else None,
             "recent_median": round(float(median(recent_values)), 6) if recent_values else None,
-            "psi": _psi(early_values, recent_values),
+            "early_missing_rate": _missing_rate(early_all_values),
+            "recent_missing_rate": _missing_rate(recent_all_values),
+            "psi": _psi(early_all_values, recent_all_values),
         },
         "early_top_tickers": early_top,
         "recent_top_tickers": recent_top,
@@ -560,8 +564,22 @@ def _session(row: dict[str, Any]) -> str:
 
 
 def _finite_feature_values(rows: list[dict[str, Any]], name: str) -> list[float]:
-    values = [float(decision_features(row).get(name, np.nan)) for row in rows]
+    return _finite_values(_feature_values(rows, name))
+
+
+def _feature_values(rows: list[dict[str, Any]], name: str) -> list[float]:
+    values = [decision_features(row).get(name) for row in rows]
+    return [float(value) if value is not None else math.nan for value in values]
+
+
+def _finite_values(values: list[float]) -> list[float]:
     return [value for value in values if math.isfinite(value)]
+
+
+def _missing_rate(values: list[float]) -> float | None:
+    if not values:
+        return None
+    return round(sum(not math.isfinite(value) for value in values) / len(values), 6)
 
 
 def _top_tickers(rows: list[dict[str, Any]], limit: int = 5) -> list[dict[str, Any]]:
@@ -577,12 +595,16 @@ def _liquidity_by_strategy(early: list[dict[str, Any]], recent: list[dict[str, A
     strategies = sorted({str((row.get("candidate") or {}).get("strategy_id") or "unknown") for row in early + recent})
     result = {}
     for strategy in strategies:
-        old = _finite_feature_values([row for row in early if (row.get("candidate") or {}).get("strategy_id") == strategy], "dollar_volume_log")
-        new = _finite_feature_values([row for row in recent if (row.get("candidate") or {}).get("strategy_id") == strategy], "dollar_volume_log")
+        old_all = _feature_values([row for row in early if (row.get("candidate") or {}).get("strategy_id") == strategy], "dollar_volume_log")
+        new_all = _feature_values([row for row in recent if (row.get("candidate") or {}).get("strategy_id") == strategy], "dollar_volume_log")
+        old = _finite_values(old_all)
+        new = _finite_values(new_all)
         result[strategy] = {
             "early_median": round(float(median(old)), 6) if old else None,
             "recent_median": round(float(median(new)), 6) if new else None,
-            "psi": _psi(old, new),
+            "early_missing_rate": _missing_rate(old_all),
+            "recent_missing_rate": _missing_rate(new_all),
+            "psi": _psi(old_all, new_all),
         }
     return result
 
@@ -590,11 +612,17 @@ def _liquidity_by_strategy(early: list[dict[str, Any]], recent: list[dict[str, A
 def _psi(early: list[float], recent: list[float]) -> float | None:
     if not early or not recent:
         return None
-    pooled = np.asarray(early + recent, dtype=float)
+    early_array = np.asarray(early, dtype=float)
+    recent_array = np.asarray(recent, dtype=float)
+    pooled = np.concatenate((early_array[np.isfinite(early_array)], recent_array[np.isfinite(recent_array)]))
+    if not len(pooled):
+        return None
     internal = np.unique(np.quantile(pooled, np.linspace(0.1, 0.9, 9)))
     edges = np.concatenate(([-np.inf], internal, [np.inf]))
-    early_rates = np.histogram(np.asarray(early), bins=edges)[0].astype(float) / len(early)
-    recent_rates = np.histogram(np.asarray(recent), bins=edges)[0].astype(float) / len(recent)
+    early_counts = np.histogram(early_array[np.isfinite(early_array)], bins=edges)[0].astype(float)
+    recent_counts = np.histogram(recent_array[np.isfinite(recent_array)], bins=edges)[0].astype(float)
+    early_rates = np.append(early_counts / len(early_array), 1.0 - np.isfinite(early_array).mean())
+    recent_rates = np.append(recent_counts / len(recent_array), 1.0 - np.isfinite(recent_array).mean())
     early_rates = np.clip(early_rates, 1e-6, None)
     recent_rates = np.clip(recent_rates, 1e-6, None)
     return round(float(np.sum((recent_rates - early_rates) * np.log(recent_rates / early_rates))), 6)

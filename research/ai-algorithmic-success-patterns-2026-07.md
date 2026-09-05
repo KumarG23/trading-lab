@@ -1,4 +1,4 @@
-# AI and Algorithmic Trading Success Patterns — 2026-08-29
+# AI and Algorithmic Trading Success Patterns — 2026-09-05
 
 Purpose: extract reproducible engineering and research patterns from credible algorithmic/ML trading work, then turn them into falsifiable Trading Lab experiments. This is not a scrapbook of return claims.
 
@@ -172,6 +172,29 @@ Trading Lab implication:
 - A current general-purpose LLM may summarize forward-collected news after the fact, but it cannot create defensible historical predictive features unless its temporal knowledge boundary is proven.
 - Do not implement this mechanism now: the active scanner-context challenger is still collecting forward evidence, the historical corpus has no point-in-time catalyst feed, and the paper omits costs and studies a different horizon/portfolio construction problem.
 
+### Rasekhschaffe: use LLMs to propose auditable features, not trades
+
+Sources:
+
+- Primary working paper: https://arxiv.org/abs/2602.00196
+- Full paper: https://arxiv.org/pdf/2602.00196
+
+Evidence tier: provisional tier 4—one 2026 working paper with a chronological 2015–2018 discovery window, 2019–2024 out-of-sample tests, an extra-day implementation-lag variant, and position-level cost analysis. It is not peer-reviewed, independently replicated, or audited live evidence; the vendor datasets and research implementation are not publicly reproducible.
+
+The paper uses GPT-4.1 with schema documentation and structured/RAG or DSPy prompting to generate executable transformations over structured analyst, options, and price-volume data. LightGBM—not the LLM—produces return forecasts. The most portable result is process-level: corrupted retrieval documentation produced negative feature performance while corrected documentation improved it, and the accepted transformations were explicit code subject to point-in-time and schema checks. The reported return results remain vulnerable to a large feature/trial search, one principal out-of-sample window, proprietary inputs, and incomplete independent replication.
+
+Transferable pattern:
+
+- Use an LLM offline as a constrained hypothesis/code generator against a versioned schema and vetted documentation; never give it order authority or outcome rows during proposal generation.
+- Require every proposed transformation to compile, use only non-negative lags and bounded rolling windows, carry an economic rationale, and survive semantic deduplication plus a complete multiple-testing ledger.
+- Compare any accepted feature with unchanged transparent baselines under execution lag, costs, concentration, and chronological holdout rules.
+
+Trading Lab implication:
+
+- A schema-only feature-proposal lane is a defensible future experiment, but it cannot repair V1's absent after-cost edge by itself.
+- Generated code would require a new versioned corpus and manifest; v5 remains immutable. The feature proposal process may see schemas, field definitions, and synthetic examples, but not private outcome rows or the untouched holdout.
+- Queue the mechanism behind the active scanner-context challenger. The forward cohort has only 13 independent sessions, so adding another challenger now would contaminate the operating design.
+
 ### Kull–Silva Filho–Flach: calibrate rare-event probabilities on disjoint evidence
 
 Sources:
@@ -321,12 +344,23 @@ Every research hypothesis must record:
 - **Failure criteria:** reject if any fit/calibration/test overlap exists; either development proper score fails to beat both baselines; improvement reverses in more than one fold; event/session counts are insufficient for stable calibration; gains depend on one strategy, symbol, or period; or the later forward confirmation fails either proper-score comparison.
 - **Status / 2026-08-29 result:** hypothesis recorded and queued, not implemented. The target delta is tiny, the existing final holdout summary is already known, and adding a calibrator immediately after observing the failed gate would invite selection bias. Keep the current model fail-closed and collect a later forward confirmation period before implementation or holdout scoring.
 
-## Current champion/challenger state — 2026-08-18
+### ATL-H-2026-09-05-01 — schema-constrained offline feature proposal
+
+- **Source / evidence tier:** Rasekhschaffe, *Generative AI for Stock Selection*, arXiv:2602.00196v1; provisional tier 4 working-paper evidence with chronological out-of-sample and cost tests, but no peer review, public replication package, audited live record, or transferable intraday result.
+- **Mechanism:** let an LLM propose one explicit, economically motivated transformation from a versioned decision-feature schema and vetted documentation; validate the generated code deterministically, freeze it, and evaluate it as an ordinary tabular feature rather than using LLM prose or runtime judgment.
+- **Transfer rationale:** the lab already keeps tabular baselines, source/schema hashes, decision-time provenance, and a multiple-testing ledger. A constrained proposer could expand the hypothesis search without placing a frontier model in the recurring scan loop, but it cannot substitute for point-in-time data or gross edge.
+- **Required decision-time data:** a new immutable corpus version containing only pre-decision fields needed by the preregistered transformation; exact schema/document hashes; transformation source hash; non-negative lag and rolling-window proofs; explicit missing sentinels; no private outcome rows in the generation prompt. Cross-sectional transforms additionally require the exact contemporaneous observable universe.
+- **Costs / fills:** unchanged gap-aware outcome path and the existing v5 conservative, Robinhood-small-equity, zero-friction diagnostic, and double-slippage scenarios. Any v6 comparison must replay the unchanged baseline on identical candidates and fills.
+- **Validation:** after `ATL-H-2026-08-18-01` resolves, generate candidates from schema/docs only, semantically deduplicate them, register every proposal and rejection, choose at most one transformation without consulting the final holdout, and compare baseline versus baseline-plus-feature through purged chronological development folds. Require a later untouched forward period before any readiness use.
+- **Failure criteria:** reject if generated code uses unavailable/future data, source/schema identity is incomplete, the trial ledger is incomplete, development expectancy is non-positive after costs, profit factor is undefined or <=1.2, any fold is non-positive, fewer than 100 observations or 20 independent sessions are selected, or gains concentrate in one symbol/strategy/regime or vanish under double slippage.
+- **Status / 2026-09-05 result:** hypothesis recorded and queued; no implementation or corpus change. The source supports a falsifiable offline feature-proposal process, not a profitable intraday strategy. V1 remains negative and the active scanner-context challenger has not cleared its 20-session development gate.
+
+## Current champion/challenger state — 2026-09-05
 
 Full trader/firm comparison and V2 operating design: `research/successful-traders-ai-and-v2-system-2026-08-18.md`.
 
 - **Frozen champion/control:** V1 ORB, VWAP trend/imbalance, VWAP reclaim, and momentum suite. It remains a research control; new portfolio admission is disabled by default.
-- **Active challenger:** `ATL-H-2026-08-18-01`, point-in-time stocks-in-play scanner context for ORB/momentum. Forward data collection only; no filtering or promotion until at least 100 independent observations across 20 sessions and preregistered net-expectancy/profit-factor/concentration/cost gates pass.
+- **Active challenger:** `ATL-H-2026-08-18-01`, point-in-time stocks-in-play scanner context for ORB/momentum. As of 2026-09-05, the live journal contains 383 policy-eligible, resolved, nonduplicate forward observations across 13 sessions. This diagnostic cohort is not a predictive-training artifact; its unfiltered expectancy is -0.312436R with profit factor 0.577438. Continue capture without filtering or promotion until at least 20 sessions and all preregistered net-expectancy/profit-factor/concentration/cost gates pass.
 - **One active challenger at a time:** queued mechanisms remain unimplemented until the active challenger resolves or a documented data-quality blocker forces a no-op redesign.
 - Continuous improvement means weekly evidence review and controlled challenger replacement—not weekly mutation of strategy rules.
 

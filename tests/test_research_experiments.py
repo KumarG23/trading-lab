@@ -127,6 +127,38 @@ def test_liquidity_drift_attributes_chronological_universe_shift():
     assert result["ticker_composition_changed"] is True
 
 
+def test_liquidity_drift_psi_counts_missingness_as_a_bucket():
+    rows = []
+    start = date(2026, 1, 1)
+    for index in range(20):
+        context = {
+            "signal_timestamp": f"{(start + timedelta(days=index)).isoformat()}T14:00:00Z",
+            "volume_ratio": 2.0,
+        }
+        if index >= 10 or index % 2 == 0:
+            context["dollar_volume"] = 1_000_000
+        rows.append({
+            "disposition": "policy_approved",
+            "candidate": {
+                "ticker": "AAA",
+                "strategy_id": "opening-range-breakout",
+                "direction": "long",
+                "planned_entry": 100.0,
+                "stop": 99.0,
+                "target": 102.0,
+                "risk_dollars": 10.0,
+                "market_context": context,
+            },
+            "outcome": {"fill_status": "filled", "net_r": 1.0, "data_quality_flags": []},
+        })
+
+    result = liquidity_drift_experiment(rows, window_fraction=0.5)
+
+    assert result["dollar_volume_log"]["early_missing_rate"] == 0.5
+    assert result["dollar_volume_log"]["recent_missing_rate"] == 0.0
+    assert result["dollar_volume_log"]["psi"] > 0.25
+
+
 def test_cost_aware_ranking_selects_policy_before_untouched_holdout():
     rows = []
     start = date(2026, 1, 1)
