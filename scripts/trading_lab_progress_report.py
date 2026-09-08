@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT))
 
 from trading_lab.daily_summary import format_daily_summary, max_drawdown_r  # noqa: E402
 from trading_lab.lanes import is_portfolio_admitted  # noqa: E402
+from trading_lab.market_calendar import XNYSCalendar  # noqa: E402
 
 DB = ROOT / "journal" / "trading-lab.db"
 SCANNER = ROOT / "data" / "processed" / "scanner-watchlist.json"
@@ -27,6 +28,14 @@ def main() -> int:
     parser.add_argument("--succinct", action="store_true", help="Emit the compact market-close briefing")
     args = parser.parse_args()
     now = datetime.now(ET)
+    calendar = XNYSCalendar()
+    if not calendar.is_session(now.date()):
+        print(
+            f"Market closed — {now:%Y-%m-%d} (NYSE calendar). "
+            "No trading session; no daily performance evaluation. "
+            "Scheduled market inactivity is not a scanner failure."
+        )
+        return 0
     session_start = datetime.combine(now.date(), time(0, 0), ET).isoformat(timespec="seconds")
     if not DB.exists():
         print(f"Trading Lab progress — {now:%Y-%m-%d %I:%M %p %Z}\nDB missing: {DB}")
@@ -80,7 +89,11 @@ def main() -> int:
 
     if args.succinct:
         runtime = _load_json(RUNTIME)
-        runtime_stale = not RUNTIME.exists() or (now.timestamp() - RUNTIME.stat().st_mtime) > 600
+        _opening, closing = calendar.session_bounds(now.date())
+        # Off-session silence is expected, including after a 13:00 early close.
+        health_reference = min(now, closing).timestamp()
+        runtime_mtime = RUNTIME.stat().st_mtime if RUNTIME.exists() else 0
+        runtime_stale = runtime_mtime > now.timestamp() or health_reference - runtime_mtime > 600
         timings = runtime.get("timings_ms") or {}
         strategy_stats: dict[str, dict[str, float]] = {}
         for position in closed_today:

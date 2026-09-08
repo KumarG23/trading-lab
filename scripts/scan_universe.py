@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 
 from trading_lab.alpaca_client import AlpacaClient  # noqa: E402
 from trading_lab.config import LabConfig  # noqa: E402
+from trading_lab.market_calendar import XNYSCalendar  # noqa: E402
 from trading_lab.universe_scanner import (  # noqa: E402
     CORE_SYMBOLS,
     DEFAULT_SCAN_UNIVERSE,
@@ -38,6 +39,11 @@ def main() -> int:
     parser.add_argument("--min-dollar-volume", type=float, default=250_000.0)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
+
+    now = datetime.now(ET)
+    if not XNYSCalendar().is_session(now.date()):
+        print(json.dumps({"ok": True, "skipped": "market_closed", "session": now.date().isoformat()}))
+        return 0
 
     cfg = LabConfig.from_env_file(ROOT / ".env")
     if not cfg.alpaca_configured:

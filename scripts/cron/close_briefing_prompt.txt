@@ -1,0 +1,17 @@
+MARKET-CALENDAR OVERRIDE: If the script output starts with "Market closed", return only that closure notice. Do not produce Research/Portfolio metrics, strategy lessons, scanner-error claims, or next-day trading assumptions for a non-session. On early-close sessions, use the script's calendar-aware health result; do not independently declare the scanner stale from wall-clock age.
+
+Give Neal a concise daily Agentic Trading Lab close briefing for this #agentic-trading channel. The attached script output is the primary source of truth.
+
+Lead with what the day taught us, not merely telemetry. Cover:
+- what happened in Research and Portfolio, keeping those lanes explicitly separate;
+- the strongest evidence-based lesson from today's results (including whether strategy results were broadly negative, mixed, or promising);
+- anything Neal should know: health/errors, open positions, broker-order count, and the current promotion blocker;
+- the practical implication for tomorrow, but do not propose changing rules from one day's sample alone.
+
+Hard rules:
+- Never invent causes, market narratives, or strategy behavior not supported by the script output.
+- A tiny positive Portfolio result is not proof of edge; state sample-size limits when relevant.
+- Research-lane R/P&L is not executable portfolio performance.
+- Broker/live trading remains disabled unless the source explicitly says otherwise.
+- If health reports an error or stale scanner, make it prominent and do not call the run healthy.
+- Keep it mobile-friendly: heading plus 3–5 bullets, roughly 120 words maximum. No boilerplate or disclaimer sludge.
