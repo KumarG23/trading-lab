@@ -1,4 +1,4 @@
-# AI and Algorithmic Trading Success Patterns — 2026-09-05
+# AI and Algorithmic Trading Success Patterns — 2026-09-12
 
 Purpose: extract reproducible engineering and research patterns from credible algorithmic/ML trading work, then turn them into falsifiable Trading Lab experiments. This is not a scrapbook of return claims.
 
@@ -258,6 +258,28 @@ Trading Lab implication:
 - Add deflated-Sharpe/PBO-style diagnostics only when the strategy-trial history is complete enough to make them meaningful.
 - Never recycle the final holdout after a disappointing result; create a later forward period.
 
+### Kang withdrawal: an attractive simple-feature result still fails when timing leaks
+
+Sources:
+
+- Withdrawn arXiv record and author comment: https://arxiv.org/abs/2601.07131
+- Original HTML manuscript, retained only to identify the invalidated mechanism: https://arxiv.org/html/2601.07131
+- Stronger surviving feature-engineering evidence and official replication package: https://www.sciencedirect.com/science/article/abs/pii/S0304405X25001461 and https://data.mendeley.com/datasets/vsww29gb36/2
+
+Evidence tier: rejected/invalidated for the Kang return claim. Version 2 was withdrawn by the author on 2026-09-07 because an implementation error introduced look-ahead bias/data leakage. Its originally reported simple-normalization and Sharpe results are not tier-4 evidence and must not be used as corroboration. The broader feature-engineering mechanism remains supported only by the separately peer-reviewed Li–Rossi–Yan–Zheng work above, with its cross-sectional/non-intraday transfer caveat intact.
+
+Transferable pattern:
+
+- Prefer transparent, economically motivated normalizations over complexity only after proving every reference window and normalization denominator was available at decision time.
+- Treat a withdrawal or failed replication as first-class negative evidence; remove the claimed performance from the evidence ladder without erasing the failed source.
+- Test temporal non-interference at the complete preprocessing-pipeline boundary. A chronological model split does not cure a feature computed with future rows.
+
+Trading Lab implication:
+
+- Do not create a new experiment from the withdrawn result. `ATL-H-2026-08-08-01` already captures the defensible point-in-time liquidity-relative hypothesis and remains deferred.
+- Any later v6 relative-liquidity feature must construct lagged reference sets separately inside each chronological fold, carry explicit cutoff/universe provenance, and fail tests when future rows can change an earlier feature value.
+- The current v5 corpus and untouched-holdout result remain unchanged; no strategy, model, threshold, or evidence artifact is modified from this source audit.
+
 ## Hypothesis registry contract
 
 Every research hypothesis must record:
@@ -355,12 +377,12 @@ Every research hypothesis must record:
 - **Failure criteria:** reject if generated code uses unavailable/future data, source/schema identity is incomplete, the trial ledger is incomplete, development expectancy is non-positive after costs, profit factor is undefined or <=1.2, any fold is non-positive, fewer than 100 observations or 20 independent sessions are selected, or gains concentrate in one symbol/strategy/regime or vanish under double slippage.
 - **Status / 2026-09-05 result:** hypothesis recorded and queued; no implementation or corpus change. The source supports a falsifiable offline feature-proposal process, not a profitable intraday strategy. V1 remains negative and the active scanner-context challenger has not cleared its 20-session development gate.
 
-## Current champion/challenger state — 2026-09-05
+## Current champion/challenger state — 2026-09-12
 
 Full trader/firm comparison and V2 operating design: `research/successful-traders-ai-and-v2-system-2026-08-18.md`.
 
 - **Frozen champion/control:** V1 ORB, VWAP trend/imbalance, VWAP reclaim, and momentum suite. It remains a research control; new portfolio admission is disabled by default.
-- **Active challenger:** `ATL-H-2026-08-18-01`, point-in-time stocks-in-play scanner context for ORB/momentum. As of 2026-09-05, the live journal contains 383 policy-eligible, resolved, nonduplicate forward observations across 13 sessions. This diagnostic cohort is not a predictive-training artifact; its unfiltered expectancy is -0.312436R with profit factor 0.577438. Continue capture without filtering or promotion until at least 20 sessions and all preregistered net-expectancy/profit-factor/concentration/cost gates pass.
+- **Active challenger:** `ATL-H-2026-08-18-01`, point-in-time stocks-in-play scanner context for ORB/momentum. As of 2026-09-12, the live journal contains 487 policy-eligible, resolved, nonduplicate forward observations across 17 sessions. This diagnostic cohort is not a predictive-training artifact; its unfiltered expectancy is -0.337760R with profit factor 0.551530. Continue capture without filtering or promotion until at least 20 sessions and all preregistered net-expectancy/profit-factor/concentration/cost gates pass.
 - **One active challenger at a time:** queued mechanisms remain unimplemented until the active challenger resolves or a documented data-quality blocker forces a no-op redesign.
 - Continuous improvement means weekly evidence review and controlled challenger replacement—not weekly mutation of strategy rules.
 
