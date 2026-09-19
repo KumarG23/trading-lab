@@ -1,4 +1,4 @@
-# AI and Algorithmic Trading Success Patterns — 2026-09-12
+# AI and Algorithmic Trading Success Patterns — 2026-09-19
 
 Purpose: extract reproducible engineering and research patterns from credible algorithmic/ML trading work, then turn them into falsifiable Trading Lab experiments. This is not a scrapbook of return claims.
 
@@ -280,6 +280,29 @@ Trading Lab implication:
 - Any later v6 relative-liquidity feature must construct lagged reference sets separately inside each chronological fold, carry explicit cutoff/universe provenance, and fail tests when future rows can change an earlier feature value.
 - The current v5 corpus and untouched-holdout result remain unchanged; no strategy, model, threshold, or evidence artifact is modified from this source audit.
 
+### Zhang–Li–Peng–Chen: measure leakage as protocol inflation, not a binary smell
+
+Sources:
+
+- arXiv abstract: https://arxiv.org/abs/2605.23959
+- HTML manuscript: https://arxiv.org/html/2605.23959v1
+
+Evidence tier: provisional tier 4—primary working-paper diagnostic with paired walk-forward tests that hold the panel, split, model family, horizon, portfolio rule, and cost convention fixed. It is not peer-reviewed, not audited live evidence, and the authors explicitly disclaim tradable alpha. The panels are daily OHLCV equities (2016–2024), not this lab’s one-minute candidates.
+
+The benchmark toggles one evaluation convention at a time around a clean t+1-open reference. Inflation is selective: centered temporal features and same-day-open execution that still sees post-open daily-bar information inflate both predictive and trading metrics; global normalization, future-informed graph structure, and same-day-close execution are weak in most of their settings.
+
+Transferable pattern:
+
+- Treat leakage as a measured protocol delta, not a vibe.
+- Change one evaluation convention at a time; keep data, split, model, costs, and portfolio rule fixed.
+- Completed-bar / next-bar availability is the defensible reference. Same-bar or same-session information that could not be known at the decision is the failure mode that actually moves numbers.
+
+Trading Lab implication:
+
+- The lab already floors decisions to completed one-minute bars and defines `data_cutoff_at` as signal time plus one minute. That is the local analogue of their t+1-open reference.
+- Do not add a new leakage harness, centered-feature transform, or same-bar fill convention this week. A one-switch audit of remaining conventions is a valid later diagnostic, not a remedy for negative after-cost expectancy.
+- The v5 corpus, promotion gates, and untouched holdout stay frozen.
+
 ## Hypothesis registry contract
 
 Every research hypothesis must record:
@@ -377,13 +400,24 @@ Every research hypothesis must record:
 - **Failure criteria:** reject if generated code uses unavailable/future data, source/schema identity is incomplete, the trial ledger is incomplete, development expectancy is non-positive after costs, profit factor is undefined or <=1.2, any fold is non-positive, fewer than 100 observations or 20 independent sessions are selected, or gains concentrate in one symbol/strategy/regime or vanish under double slippage.
 - **Status / 2026-09-05 result:** hypothesis recorded and queued; no implementation or corpus change. The source supports a falsifiable offline feature-proposal process, not a profitable intraday strategy. V1 remains negative and the active scanner-context challenger has not cleared its 20-session development gate.
 
-## Current champion/challenger state — 2026-09-12
+### ATL-H-2026-09-19-01 — one-switch decision-time leakage diagnostic
+
+- **Source / evidence tier:** Zhang, Li, Peng, and Chen, *When Alpha Disappears: A One-Switch Benchmark for Decision-Time Leakage in Financial Backtests*, arXiv:2605.23959v1 (2026-05-12); provisional tier 4 diagnostic working paper, not peer-reviewed or audited live evidence, and not a profitability claim.
+- **Mechanism:** estimate protocol-induced inflation by toggling exactly one evaluation convention around a completed-bar / next-open reference while holding panel, split, model, horizon, portfolio rule, and costs fixed.
+- **Transfer rationale:** the lab already encodes completed-bar availability. A later one-switch audit could quantify leftover conventions (centered rolling features, global normalization, same-bar stop/target) instead of treating “leakage” as a binary code smell. Daily-bar results do not transfer as edge.
+- **Required decision-time data:** existing v5 point-in-time features, `data_cutoff_at`, and the shared gap-aware fill engine. No new market-data feed and no post-decision fields.
+- **Costs / fills:** unchanged v5 conservative 5 bps entry / 10 bps exit / $0.005 per share each side, plus the existing Robinhood-small-equity, zero-friction diagnostic, and double-slippage scenarios.
+- **Validation:** if ever implemented, preregister one convention toggle, compare against the current completed-bar reference on development folds only, and leave the untouched holdout unscored unless development expectancy is positive after costs and sample/session gates pass.
+- **Failure criteria:** reject if the toggle uses future rows, changes fills or admission, weakens a promotion gate, or is used to rescue a negative strategy by relaxing chronology.
+- **Status / 2026-09-19 result:** hypothesis recorded and deferred. No code, corpus, fill, or gate change. The active scanner-context challenger remains the sole operating experiment.
+
+## Current champion/challenger state — 2026-09-19
 
 Full trader/firm comparison and V2 operating design: `research/successful-traders-ai-and-v2-system-2026-08-18.md`.
 
 - **Frozen champion/control:** V1 ORB, VWAP trend/imbalance, VWAP reclaim, and momentum suite. It remains a research control; new portfolio admission is disabled by default.
-- **Active challenger:** `ATL-H-2026-08-18-01`, point-in-time stocks-in-play scanner context for ORB/momentum. As of 2026-09-12, the live journal contains 487 policy-eligible, resolved, nonduplicate forward observations across 17 sessions. This diagnostic cohort is not a predictive-training artifact; its unfiltered expectancy is -0.337760R with profit factor 0.551530. Continue capture without filtering or promotion until at least 20 sessions and all preregistered net-expectancy/profit-factor/concentration/cost gates pass.
-- **One active challenger at a time:** queued mechanisms remain unimplemented until the active challenger resolves or a documented data-quality blocker forces a no-op redesign.
+- **Active challenger:** `ATL-H-2026-08-18-01`, point-in-time stocks-in-play scanner context for ORB/momentum. As of 2026-09-19, the live journal’s preregistered primary cohort—admitted, resolved, ORB/momentum rows with a finite `scanner_score`—has 638 observations across 22 sessions (2026-08-19 through 2026-09-18). This diagnostic cohort is not a predictive-training artifact. Unfiltered expectancy is -0.372516R with profit factor 0.523893. The 100-observation / 20-session minimum is now met; development net-expectancy and profit-factor gates fail, and the path is slightly worse than the 2026-09-12 snapshot (487 observations / 17 sessions / -0.337760R / 0.551530). Continue unfiltered capture. Do not filter, retrain, promote, or open a second code challenger this week.
+- **One active challenger at a time:** queued mechanisms remain unimplemented until this challenger is formally retired or a documented data-quality blocker forces a no-op redesign.
 - Continuous improvement means weekly evidence review and controlled challenger replacement—not weekly mutation of strategy rules.
 
 ## Explicit non-lessons
