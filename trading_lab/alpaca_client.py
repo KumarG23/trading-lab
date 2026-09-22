@@ -79,6 +79,7 @@ class AlpacaClient:
         feed: str = "iex",
         data_url: str = "https://data.alpaca.markets",
         batch_size: int = 25,
+        adjustment: str | None = None,
     ) -> list[dict[str, Any]]:
         self._require_paper()
         normalized_symbols = [symbol.upper() for symbol in symbols]
@@ -94,6 +95,8 @@ class AlpacaClient:
                     "feed": feed,
                     "limit": 10000,
                 }
+                if adjustment is not None:
+                    params["adjustment"] = adjustment
                 if page_token:
                     params["page_token"] = page_token
                 query = urlencode(params)

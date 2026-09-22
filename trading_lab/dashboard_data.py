@@ -53,6 +53,7 @@ def build_dashboard_snapshot(
     evidence_review = _load_evidence_review(evidence_status_path)
     return {
         "generated_at": datetime.now(ET).isoformat(timespec="seconds"),
+        "research_phase": "legacy_v1_retired_etf_v0_development_failed",
         "mode": "paper_proposal_only_no_orders" if not broker_orders_enabled else "broker_paper_execution",
         "account": {"paper_equity": account_equity},
         "safety": {

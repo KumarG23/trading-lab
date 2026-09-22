@@ -1,5 +1,7 @@
 # Agentic Trading Lab
 
+> **2026-09-22 pivot:** The one-minute V1 ORB/VWAP/momentum suite and scanner-context challenger are retired after negative after-cost evidence. Its five Hermes collection/report/steward jobs are paused. The dashboard is an archive of V1 results. The first **offline-only, preregistered multi-day ETF trend/momentum challenger** failed its development gate; see `research/etf-trend-v0-preregistration.md` and `scripts/run_etf_trend_research.py`. No new challenger is running, and the untouched holdout remains closed. No broker orders, live execution, or autonomous promotion. Historical V1 instructions below are retained for provenance, not a runbook to restart them.
+
 Small-money, high-risk day-trading research lab. This is controlled research, not retirement planning.
 
 ## Mission

@@ -146,11 +146,11 @@ footer {{ color:var(--muted); margin-top:18px; font-size:12px; font-family:ui-mo
 <body>
 <main>
 <header>
-  <div><div class="eyebrow">Jarvis Market Goblin Containment Unit</div><h1>Agentic Trading Lab</h1><div class="sub">Dynamic scanner → deterministic strategies → paper journal. AI gets a clipboard, not the launch codes.</div></div>
-  <div class="badge">LIVE TRADING DISABLED</div>
+  <div><div class="eyebrow">Jarvis Market Goblin Containment Unit</div><h1>Agentic Trading Lab</h1><div class="sub">V1 intraday research is retired. This dashboard preserves its historical journal. The first offline ETF trend challenger failed its development gate; no forward loop is scheduled. Scanner, loop, and evidence cards below are archival, not current activity.</div></div>
+  <div class="badge">V1 PAUSED · NO BROKER ORDERS</div>
 </header>
 <section class="grid">
-  <div class="card hero"><div class="radar"></div><h2>Today's scanner watchlist</h2><p class="watchlist">{scanner_watchlist}</p><div class="pills"><div class="pill"><span>Universe scanned</span><strong>{scanner.get('scan_universe_count', 0)}</strong></div><div class="pill"><span>Top matches</span><strong>{len(scanner.get('top_matches', []))}</strong></div><div class="pill"><span>Loop</span><strong>{timings.get('total', '?')} ms</strong></div><div class="pill"><span>Decision</span><strong>{timings.get('decision', '?')} ms</strong></div></div></div>
+  <div class="card hero"><div class="radar"></div><h2>Archived scanner watchlist</h2><p class="watchlist">{scanner_watchlist}</p><div class="pills"><div class="pill"><span>Universe scanned</span><strong>{scanner.get('scan_universe_count', 0)}</strong></div><div class="pill"><span>Top matches</span><strong>{len(scanner.get('top_matches', []))}</strong></div><div class="pill"><span>Loop</span><strong>{timings.get('total', '?')} ms</strong></div><div class="pill"><span>Decision</span><strong>{timings.get('decision', '?')} ms</strong></div></div></div>
   <div class="card scanner"><h2>Radar pings</h2>{scanner_cards}</div>
   {_kpi('Proposals', snapshot['counts']['proposals'], 'all logged proposals')}
   {_kpi('Active', snapshot['counts']['active_positions'], 'simulated positions')}
