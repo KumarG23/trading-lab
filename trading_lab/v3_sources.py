@@ -33,9 +33,9 @@ class _Text(HTMLParser):
 
 
 def sec_events(submissions: dict, *, cik: int, symbol: str, observed_at: datetime, fetch_document, lookback_days: int = 7) -> list[dict]:
-    """Only 8-K Item 2.02; use the filing's primary document, not invented earnings text."""
-    if int(submissions["cik"]) != cik:
-        raise ValueError("SEC CIK mismatch")
+    """Only Item 2.02 filings with a real EX-99.1 release; no cover-page proxy."""
+    if int(submissions["cik"]) != cik or symbol not in submissions.get("tickers", []):
+        raise ValueError("SEC CIK/ticker mismatch")
     recent = submissions["filings"]["recent"]
     keys = ("accessionNumber", "form", "items", "acceptanceDateTime", "primaryDocument")
     if any(len(recent[k]) != len(recent["form"]) for k in keys):
@@ -55,11 +55,11 @@ def sec_events(submissions: dict, *, cik: int, symbol: str, observed_at: datetim
         if len(events) >= 3:
             break
         accession = recent["accessionNumber"][i]
-        doc = recent["primaryDocument"][i]
-        if not re.fullmatch(r"\d{10}-\d{2}-\d{6}", accession) or not re.fullmatch(r"[A-Za-z0-9_.-]+", doc) or doc in {".", ".."}:
-            raise ValueError("unsafe SEC document path")
+        if not re.fullmatch(r"\d{10}-\d{2}-\d{6}", accession):
+            raise ValueError("unsafe SEC accession")
         root = f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession.replace('-', '')}/"
-        header = fetch_document(root + accession + ".txt")[:4096]
+        filing_text = fetch_document(root + accession + ".txt")
+        header = filing_text[:4096]
         match = re.search(r"<ACCEPTANCE-DATETIME>\s*(\d{14})", header)
         if not match:
             raise ValueError("SEC raw acceptance header missing")
@@ -74,15 +74,23 @@ def sec_events(submissions: dict, *, cik: int, symbol: str, observed_at: datetim
             raise ValueError("future SEC acceptance time")
         if accepted < observed_at.astimezone(timezone.utc) - timedelta(days=lookback_days):
             continue
+        matches = re.findall(r"<DOCUMENT>\s*<TYPE>\s*([^\r\n]+).*?<FILENAME>\s*([^\r\n]+)",
+                             filing_text, flags=re.IGNORECASE | re.DOTALL)
+        releases = [name.strip() for doc_type, name in matches if doc_type.strip().upper() == "EX-99.1"]
+        if len(releases) != 1:
+            continue  # no unambiguous release; never label the 8-K cover as earnings text
+        doc = releases[0]
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+", doc) or doc in {".", ".."}:
+            raise ValueError("unsafe SEC document path")
         url = root + doc
         page = fetch_document(url)
         parser = _Text()
         parser.feed(page)
         text = " ".join(" ".join(parser.parts).split())
         if not text:
-            raise ValueError("empty SEC primary document")
+            raise ValueError("empty SEC exhibit")
         # No truncation: reject oversized content rather than mislabel a partial filing.
-        raw = {"provider": "sec-edgar-8k-primary", "url": url, "symbol": symbol,
+        raw = {"provider": "sec-edgar-ex-99.1", "url": url, "symbol": symbol,
                "kind": "earnings", "published_at": accepted.isoformat(), "text": text}
         validate_event(raw, observed_at=observed_at)
         events.append(raw)
@@ -98,9 +106,10 @@ def fetch_sec(cik: int, *, contact: str, agent_name: str = "TradingLabResearch",
         if not (url.startswith("https://www.sec.gov/Archives/edgar/data/") or
                 url == f"https://data.sec.gov/submissions/CIK{cik:010d}.json"):
             raise ValueError("unexpected SEC URL")
+        size_limit = 8_000_000 if url.startswith("https://data.sec.gov/submissions/") else 2_000_000
         with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout) as response:
-            body = response.read(2_000_001)
-            if len(body) > 2_000_000:
+            body = response.read(size_limit + 1)
+            if len(body) > size_limit:
                 raise ValueError("SEC document exceeds size limit")
             return body.decode("utf-8", errors="replace")
 
