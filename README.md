@@ -1,6 +1,6 @@
 # Agentic Trading Lab
 
-> **2026-09-22 pivot:** The one-minute V1 ORB/VWAP/momentum suite and scanner-context challenger are retired after negative after-cost evidence. Its five Hermes collection/report/steward jobs are paused. The dashboard is an archive of V1 results. The first **offline-only, preregistered multi-day ETF trend/momentum challenger** failed its development gate; see `research/etf-trend-v0-preregistration.md` and `scripts/run_etf_trend_research.py`. No new challenger is running, and the untouched holdout remains closed. No broker orders, live execution, or autonomous promotion. Historical V1 instructions below are retained for provenance, not a runbook to restart them.
+> **2026-09-22 status:** V1 intraday and the first ETF trend challenger failed development evidence gates; their jobs remain paused and their records are archival. V3 is a **new event + market-context hypothesis**, currently an intake-only prototype: `research/v3-event-context-research-contract.md`, `scripts/import_catalyst_events.py`, and `trading_lab/catalyst_events.py`. One real SEC filing headline was imported after its filing acceptance time; it is not retroactive backtest evidence. No V3 predictive model, scheduled event collector, proposal loop, broker orders, or live execution. Historical operating instructions below are provenance, not a restart runbook.
 
 Small-money, high-risk day-trading research lab. This is controlled research, not retirement planning.
 

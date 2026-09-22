@@ -146,7 +146,7 @@ footer {{ color:var(--muted); margin-top:18px; font-size:12px; font-family:ui-mo
 <body>
 <main>
 <header>
-  <div><div class="eyebrow">Jarvis Market Goblin Containment Unit</div><h1>Agentic Trading Lab</h1><div class="sub">V1 intraday research is retired. This dashboard preserves its historical journal. The first offline ETF trend challenger failed its development gate; no forward loop is scheduled. Scanner, loop, and evidence cards below are archival, not current activity.</div></div>
+  <div><div class="eyebrow">Jarvis Market Goblin Containment Unit</div><h1>Agentic Trading Lab</h1><div class="sub">V1 intraday research is retired. This dashboard preserves its historical journal. The ETF challenger also failed. V3 event-context research is intake-only: no trained model or scheduled trading loop. Scanner and evidence cards below are archival, not current activity.</div></div>
   <div class="badge">V1 PAUSED · NO BROKER ORDERS</div>
 </header>
 <section class="grid">
