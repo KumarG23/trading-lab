@@ -17,6 +17,7 @@ from trading_lab.catalyst_events import import_jsonl
 from trading_lab.config import LabConfig
 from trading_lab.v3_sources import alpaca_news_probe, fetch_sec, sec_events
 from trading_lab.v3_news import capture_news
+from trading_lab.v3_news_history import audit_news, load_snapshots, next_window
 from trading_lab.v3_universe import CORE, ELIGIBLE, FINGERPRINT
 from trading_lab.v3_ciks import CIKS
 
@@ -30,13 +31,17 @@ def main():
     parser.add_argument("--sec-core", action="store_true", help="bounded 24-name core SEC intake")
     parser.add_argument("--sec-eligible", action="store_true", help="bounded 44-name core plus expansion SEC intake")
     parser.add_argument("--alpaca-news", action="store_true")
-    parser.add_argument("--capture-news", action="store_true", help="store one bounded all-eligible news snapshot")
+    parser.add_argument("--capture-news", action="store_true", help="store one bounded incremental news snapshot")
+    parser.add_argument("--audit-news", action="store_true", help="offline snapshot overlap and duplicate counts")
     args = parser.parse_args()
-    if not any((args.sec, args.sec_core, args.sec_eligible, args.alpaca_news, args.capture_news)):
-        parser.error("choose a SEC mode, --alpaca-news, or --capture-news")
+    if not any((args.sec, args.sec_core, args.sec_eligible, args.alpaca_news, args.capture_news, args.audit_news)):
+        parser.error("choose a SEC mode, --alpaca-news, --capture-news, or --audit-news")
     if sum((args.sec, args.sec_core, args.sec_eligible)) > 1:
         parser.error("choose one SEC intake mode")
     result = {}
+    directory = Path("data/events/news-snapshots")
+    if args.audit_news:
+        result["audit_news"] = audit_news(load_snapshots(directory))
     if args.sec or args.sec_core or args.sec_eligible:
         contact = os.environ.get("SEC_CONTACT_EMAIL")
         if not contact:
@@ -72,11 +77,12 @@ def main():
             except urllib.error.HTTPError as exc:
                 result["alpaca_news"] = {"reachable": False, "http_status": exc.code}
         if args.capture_news:
+            now = datetime.now(timezone.utc)
+            start, _ = next_window(load_snapshots(directory), now=now)
             capture = capture_news(api_key=config.alpaca_api_key, secret_key=config.alpaca_secret_key,
-                                   observed_at=datetime.now(timezone.utc))
+                                   observed_at=now, window_start=start)
             if capture["universe_sha256"] != FINGERPRINT:
                 raise ValueError("universe version changed mid-capture")
-            directory = Path("data/events/news-snapshots")
             directory.mkdir(parents=True, exist_ok=True)
             destination = directory / (capture["observed_at"].replace(":", "-").replace("+00-00", "Z") + ".json")
             with os.fdopen(os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w", encoding="utf-8") as output:

@@ -11,12 +11,17 @@ from .v3_universe import ELIGIBLE, FINGERPRINT, tier
 
 
 def capture_news(*, api_key: str, secret_key: str, observed_at: datetime,
-                 hours: int = 24, max_pages: int = 4, fetch_json=None) -> dict:
+                 hours: int = 24, window_start: datetime | None = None,
+                 max_pages: int = 4, fetch_json=None) -> dict:
     """Require complete pages; preserve all eligible stories, not just exciting ones."""
-    if observed_at.tzinfo is None or not 1 <= hours <= 24 or not 1 <= max_pages <= 10:
+    if observed_at.tzinfo is None or observed_at.utcoffset() is None or not 1 <= hours <= 24 or not 1 <= max_pages <= 10:
         raise ValueError("invalid capture bounds")
     seen = observed_at.astimezone(timezone.utc)
-    start = seen - timedelta(hours=hours)
+    start = window_start.astimezone(timezone.utc) if window_start and window_start.tzinfo and window_start.utcoffset() is not None else seen - timedelta(hours=hours)
+    if window_start is not None and (window_start.tzinfo is None or window_start.utcoffset() is None):
+        raise ValueError("naive capture window")
+    if not timedelta(0) < seen - start <= timedelta(hours=24):
+        raise ValueError("capture window exceeds bounds")
     headers = {"APCA-API-KEY-ID": api_key, "APCA-API-SECRET-KEY": secret_key}
 
     def default_fetch(url):
