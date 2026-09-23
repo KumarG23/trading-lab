@@ -1,0 +1,12 @@
+[Unit]
+Description=Check V3 research collector continuity every fifteen minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+AccuracySec=30s
+Persistent=true
+Unit=trading-lab-v3-health.service
+
+[Install]
+WantedBy=timers.target

@@ -23,9 +23,10 @@ def instant(value: str) -> datetime:
     return stamp.astimezone(timezone.utc)
 
 
-def load_snapshots(directory: Path) -> list[dict]:
+def load_snapshots(directory: Path, *, latest_only: bool = False) -> list[dict]:
     snapshots = []
-    for path in sorted(directory.glob("*.json")):
+    paths = sorted(directory.glob("*.json"))
+    for path in (paths[-1:] if latest_only else paths):
         record = json.loads(path.read_text(encoding="utf-8"))
         if record.get("schema") != "v3-news-snapshot-v1" or record.get("universe_sha256") != FINGERPRINT:
             raise ValueError(f"unknown news snapshot schema/universe: {path.name}")

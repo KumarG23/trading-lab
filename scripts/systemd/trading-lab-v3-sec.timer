@@ -1,0 +1,12 @@
+[Unit]
+Description=V3 paced SEC research sweep every thirty minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=30min
+AccuracySec=30s
+Persistent=true
+Unit=trading-lab-v3-sec.service
+
+[Install]
+WantedBy=timers.target

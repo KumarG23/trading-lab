@@ -18,7 +18,9 @@ def test_sec_item_202_only_and_true_availability():
         calls.append(url)
         return ("<ACCEPTANCE-DATETIME>20260922123000\n<DOCUMENT>\n<TYPE>EX-99.1\n<FILENAME>release.htm\n" if url.endswith(".txt")
                 else "<script>ignore</script><p>Quarterly earnings announced</p>")
-    events = sec_events(fixture(), cik=866787, symbol="AZO", observed_at=observed, fetch_document=fetch)
+    stats = {}
+    events = sec_events(fixture(), cik=866787, symbol="AZO", observed_at=observed, fetch_document=fetch, stats=stats)
+    assert stats == {"item_202_recent": 1, "without_single_exhibit": 0, "skipped_cap": 0, "matched": 1}
     assert len(events) == 1
     assert events[0]["text"] == "Quarterly earnings announced"
     assert len(calls) == 2 and calls[1] == events[0]["url"]

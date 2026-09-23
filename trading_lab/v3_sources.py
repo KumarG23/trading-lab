@@ -32,8 +32,10 @@ class _Text(HTMLParser):
             self.parts.append(data)
 
 
-def sec_events(submissions: dict, *, cik: int, symbol: str, observed_at: datetime, fetch_document, lookback_days: int = 7) -> list[dict]:
+def sec_events(submissions: dict, *, cik: int, symbol: str, observed_at: datetime, fetch_document, lookback_days: int = 7, stats: dict | None = None) -> list[dict]:
     """Only Item 2.02 filings with a real EX-99.1 release; no cover-page proxy."""
+    if stats is not None:
+        stats.update(item_202_recent=0, without_single_exhibit=0, skipped_cap=0, matched=0)
     if int(submissions["cik"]) != cik or symbol not in submissions.get("tickers", []):
         raise ValueError("SEC CIK/ticker mismatch")
     recent = submissions["filings"]["recent"]
@@ -52,8 +54,12 @@ def sec_events(submissions: dict, *, cik: int, symbol: str, observed_at: datetim
         accepted = accepted.astimezone(timezone.utc)
         if accepted < observed_at.astimezone(timezone.utc) - timedelta(days=lookback_days + 1):
             continue
+        if stats is not None:
+            stats["item_202_recent"] += 1
         if len(events) >= 3:
-            break
+            if stats is not None:
+                stats["skipped_cap"] += 1
+            continue
         accession = recent["accessionNumber"][i]
         if not re.fullmatch(r"\d{10}-\d{2}-\d{6}", accession):
             raise ValueError("unsafe SEC accession")
@@ -78,6 +84,8 @@ def sec_events(submissions: dict, *, cik: int, symbol: str, observed_at: datetim
                              filing_text, flags=re.IGNORECASE | re.DOTALL)
         releases = [name.strip() for doc_type, name in matches if doc_type.strip().upper() == "EX-99.1"]
         if len(releases) != 1:
+            if stats is not None:
+                stats["without_single_exhibit"] += 1
             continue  # no unambiguous release; never label the 8-K cover as earnings text
         doc = releases[0]
         if not re.fullmatch(r"[A-Za-z0-9_.-]+", doc) or doc in {".", ".."}:
@@ -94,6 +102,8 @@ def sec_events(submissions: dict, *, cik: int, symbol: str, observed_at: datetim
                "kind": "earnings", "published_at": accepted.isoformat(), "text": text}
         validate_event(raw, observed_at=observed_at)
         events.append(raw)
+        if stats is not None:
+            stats["matched"] += 1
     return events
 
 

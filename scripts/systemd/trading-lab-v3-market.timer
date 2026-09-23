@@ -1,0 +1,11 @@
+[Unit]
+Description=Sample V3 IEX market context every 5 minutes on weekdays 04:00-19:55 ET
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 04..19:00/05:00
+AccuracySec=30s
+Persistent=false
+Unit=trading-lab-v3-market.service
+
+[Install]
+WantedBy=timers.target

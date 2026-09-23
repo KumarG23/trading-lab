@@ -1,0 +1,12 @@
+[Unit]
+Description=V3 read-only news research capture every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Persistent=true
+Unit=trading-lab-v3-news.service
+
+[Install]
+WantedBy=timers.target
