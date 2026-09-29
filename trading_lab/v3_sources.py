@@ -116,7 +116,10 @@ def fetch_sec(cik: int, *, contact: str, agent_name: str = "TradingLabResearch",
         if not (url.startswith("https://www.sec.gov/Archives/edgar/data/") or
                 url == f"https://data.sec.gov/submissions/CIK{cik:010d}.json"):
             raise ValueError("unexpected SEC URL")
-        size_limit = 8_000_000 if url.startswith("https://data.sec.gov/submissions/") else 2_000_000
+        # A complete 8-K bundle can exceed the individual exhibit cap (CCL: 2.35 MB).
+        # Keep both reads bounded; never parse a truncated submission as complete.
+        size_limit = (8_000_000 if url.startswith("https://data.sec.gov/submissions/") else
+                      4_000_000 if re.search(r"/\d{10}-\d{2}-\d{6}\.txt$", url) else 2_000_000)
         with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout) as response:
             body = response.read(size_limit + 1)
             if len(body) > size_limit:

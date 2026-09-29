@@ -2,7 +2,41 @@ from datetime import datetime, timezone
 
 import pytest
 
-from trading_lab.v3_sources import sec_events
+from trading_lab.v3_sources import fetch_sec, sec_events
+
+
+def test_sec_filing_size_allows_bounded_multi_document_submission(monkeypatch):
+    import io
+    import json
+    from trading_lab import v3_sources
+
+    def fake_open(request, timeout):
+        if request.full_url.endswith('.json'):
+            return io.BytesIO(json.dumps({'cik': 866787}).encode())
+        return io.BytesIO(b'x' * 2_353_093)
+
+    monkeypatch.setattr(v3_sources.urllib.request, 'urlopen', fake_open)
+    submissions, get = fetch_sec(866787, contact='research@example.com')
+    assert submissions['cik'] == 866787
+    assert len(get('https://www.sec.gov/Archives/edgar/data/866787/000117184326006159/0001171843-26-006159.txt')) == 2_353_093
+
+
+@pytest.mark.parametrize('path, size', [
+    ('0001171843-26-006159.txt', 4_000_001),
+    ('exhibit.htm', 2_000_001),
+])
+def test_sec_document_size_limits_stay_bounded(monkeypatch, path, size):
+    import io
+    from trading_lab import v3_sources
+
+    def fake_open(request, timeout):
+        if request.full_url.endswith('.json'):
+            return io.BytesIO(b'{"cik":866787}')
+        return io.BytesIO(b'x' * size)
+    monkeypatch.setattr(v3_sources.urllib.request, 'urlopen', fake_open)
+    _, get = fetch_sec(866787, contact='research@example.com')
+    with pytest.raises(ValueError, match='size limit'):
+        get('https://www.sec.gov/Archives/edgar/data/866787/000117184326006159/' + path)
 
 
 def fixture(*, items="2.02", cik=866787, doc="earnings.htm", accepted="2026-09-22T12:30:00Z"):
