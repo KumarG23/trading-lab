@@ -78,6 +78,20 @@ def test_sec_rejects_wrong_issuer_or_document_escape():
                    fetch_document=lambda _: "<ACCEPTANCE-DATETIME>20260922123000\n<DOCUMENT>\n<TYPE>EX-99.1\n<FILENAME>../secret\n")
 
 
+def test_sec_accepts_true_utc_submissions_clock_only_when_raw_header_agrees():
+    observed = datetime(2026, 9, 30, 14, tzinfo=timezone.utc)
+    def fetch(url):
+        return ("<ACCEPTANCE-DATETIME>20260929091612\n<DOCUMENT>\n<TYPE>EX-99.1\n<FILENAME>release.htm\n"
+                if url.endswith('.txt') else '<p>Quarterly earnings announced</p>')
+    case = fixture(accepted="2026-09-29T13:16:12.000Z")
+    result = sec_events(case, cik=866787, symbol="AZO", observed_at=observed, fetch_document=fetch)
+    assert len(result) == 1
+    assert result[0]['published_at'] == '2026-09-29T13:16:12+00:00'
+    with pytest.raises(ValueError, match="acceptance clocks disagree"):
+        sec_events(fixture(accepted="2026-09-29T13:16:13Z"), cik=866787, symbol="AZO",
+                   observed_at=observed, fetch_document=fetch)
+
+
 def test_sec_old_filing_does_not_fetch_or_retroactively_apply():
     observed = datetime(2026, 9, 22, 18, tzinfo=timezone.utc)
     assert sec_events(fixture(accepted="2026-08-22T12:30:00Z"), cik=866787, symbol="AZO", observed_at=observed,

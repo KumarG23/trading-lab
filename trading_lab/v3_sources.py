@@ -7,6 +7,7 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 from urllib.parse import urlencode
+from zoneinfo import ZoneInfo
 
 from .catalyst_events import validate_event
 
@@ -49,7 +50,6 @@ def sec_events(submissions: dict, *, cik: int, symbol: str, observed_at: datetim
         accepted = datetime.fromisoformat(recent["acceptanceDateTime"][i].replace("Z", "+00:00"))
         if accepted.tzinfo is None:
             # SEC submissions acceptanceDateTime is Eastern; DST resolved by zoneinfo.
-            from zoneinfo import ZoneInfo
             accepted = accepted.replace(tzinfo=ZoneInfo("America/New_York"))
         accepted = accepted.astimezone(timezone.utc)
         if accepted < observed_at.astimezone(timezone.utc) - timedelta(days=lookback_days + 1):
@@ -69,13 +69,16 @@ def sec_events(submissions: dict, *, cik: int, symbol: str, observed_at: datetim
         match = re.search(r"<ACCEPTANCE-DATETIME>\s*(\d{14})", header)
         if not match:
             raise ValueError("SEC raw acceptance header missing")
-        # Raw filing header is Eastern wall time; submissions JSON may carry a Z
-        # suffix on that same clock time. Never treat that suffix as proof of UTC.
-        from zoneinfo import ZoneInfo
+        # SEC submissions has been observed using BOTH conventions for the same
+        # accession: Z on the Eastern wall clock, then a corrected true UTC Z.
+        # Anchor on the raw Eastern header and accept only either exact clock.
         raw_time = datetime.strptime(match.group(1), "%Y%m%d%H%M%S")
-        if raw_time != datetime.fromisoformat(recent["acceptanceDateTime"][i].replace("Z", "+00:00")).replace(tzinfo=None):
+        raw_utc = raw_time.replace(tzinfo=ZoneInfo("America/New_York")).astimezone(timezone.utc)
+        json_time = datetime.fromisoformat(recent["acceptanceDateTime"][i].replace("Z", "+00:00"))
+        if not (json_time.replace(tzinfo=None) == raw_time
+                or (json_time.tzinfo is not None and json_time.astimezone(timezone.utc) == raw_utc)):
             raise ValueError("SEC acceptance clocks disagree")
-        accepted = raw_time.replace(tzinfo=ZoneInfo("America/New_York")).astimezone(timezone.utc)
+        accepted = raw_utc
         if accepted > observed_at.astimezone(timezone.utc):
             raise ValueError("future SEC acceptance time")
         if accepted < observed_at.astimezone(timezone.utc) - timedelta(days=lookback_days):
