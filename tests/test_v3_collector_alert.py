@@ -16,3 +16,10 @@ def test_alert_only_on_change_or_bounded_repeat():
     recovered, clean = message(good, state, NOW + timedelta(hours=1))
     assert "recovered" in recovered
     assert message(good, clean, NOW + timedelta(hours=2))[0] == ""
+
+def test_alert_reason_changes_are_visible_without_raw_error():
+    bad = {"sources": {"sec": {"healthy": False, "last_error_code": "sec_scan_cap"}}}
+    notice, state = message(bad, {}, NOW)
+    assert "sec (sec_scan_cap)" in notice
+    bad["sources"]["sec"]["last_error_code"] = "provider_rate_limited"
+    assert "provider_rate_limited" in message(bad, state, NOW + timedelta(minutes=30))[0]

@@ -21,6 +21,18 @@ SEC_CONTACT = Path.home() / ".config/trading-lab/sec-contact"
 COMMANDS = {"news": "--capture-news", "sec": "--sec-eligible", "market": "--capture-market"}
 MAX_AGE = {"news": timedelta(minutes=20), "sec": timedelta(minutes=90), "market": timedelta(minutes=20)}
 
+# Only exact, reviewed diagnostic fragments may leave the source subprocess.
+# Never store provider error text, URLs, article text, or response bodies.
+SAFE_FAILURES = {"SEC acceptance clocks disagree": "sec_clock_mismatch",
+                 "SEC document exceeds size limit": "sec_document_too_large",
+                 "SEC source scan capacity exceeded": "sec_scan_cap",
+                 "HTTP Error 429": "provider_rate_limited",
+                 "HTTP Error 403": "provider_forbidden",
+                 "news capture gap exceeds": "news_coverage_gap"}
+
+def failure_code(stderr: str) -> str:
+    return next((code for fragment, code in SAFE_FAILURES.items() if fragment in stderr), "source_command_failed")
+
 
 def run_source(source: str, *, state: Path = STATE, executable: str = sys.executable,
                invoke=None, now=None) -> dict:
@@ -48,6 +60,7 @@ def run_source(source: str, *, state: Path = STATE, executable: str = sys.execut
                                                env=env, timeout=240 if source == "sec" else 60, check=False)
             if proc.returncode != 0:
                 # Never persist stdout/stderr: external errors may contain credentials or article text.
+                receipt["error_code"] = failure_code(proc.stderr or "")
                 raise RuntimeError(f"source command failed (exit {proc.returncode})")
             result = json.loads(proc.stdout)
             report = result[{"news": "capture_news", "sec": "sec", "market": "capture_market"}[source]]
@@ -107,6 +120,9 @@ def health(*, state: Path = STATE, snapshots: Path = SNAPSHOTS, at=None) -> dict
                            "last_status": last["status"] if last else "missing",
                            "last_success_at": last_good["finished_at"] if last_good else None,
                            "failures": sum(row.get("status") != "ok" for row in rows)}
+        if last and last["status"] != "ok":
+            code = last.get("error_code")
+            results[source]["last_error_code"] = code if code in {*SAFE_FAILURES.values(), "source_command_failed"} else "unknown_failure"
         if source == "market":
             results[source]["expected_now"] = market_window
             if not market_window:

@@ -1,0 +1,11 @@
+[Unit]
+Description=Check post-observation V3 IEX bars each minute on weekdays (no orders)
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 09..16:*:00
+AccuracySec=15s
+Persistent=false
+Unit=trading-lab-v3-forward-intake.service
+
+[Install]
+WantedBy=timers.target

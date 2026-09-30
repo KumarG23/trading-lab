@@ -1,0 +1,11 @@
+[Unit]
+Description=Resolve V3 offline IEX outcomes each weekday after close
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 16:30:00
+AccuracySec=30s
+Persistent=false
+Unit=trading-lab-v3-forward-resolve.service
+
+[Install]
+WantedBy=timers.target

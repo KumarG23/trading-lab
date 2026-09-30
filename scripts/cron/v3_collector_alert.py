@@ -13,8 +13,9 @@ STATE = ROOT / "data/events/collector/alert-state.json"
 
 
 def message(status: dict, prior: dict, now: datetime) -> tuple[str, dict]:
-    unhealthy = sorted(k for k, v in status["sources"].items() if not v["healthy"])
-    signature = ",".join(unhealthy)
+    reasons = [k + " (" + v.get("last_error_code", "stale_or_incomplete") + ")"
+               for k, v in sorted(status["sources"].items()) if not v["healthy"]]
+    signature = ",".join(reasons)
     previous = prior.get("signature", "")
     last_alert = datetime.fromisoformat(prior["last_alert_at"]) if prior.get("last_alert_at") else None
     due = signature != previous or (signature and (not last_alert or now - last_alert >= timedelta(hours=4)))

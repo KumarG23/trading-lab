@@ -24,6 +24,20 @@ def test_receipts_sanitize_failures_and_do_not_turn_zero_into_error(tmp_path):
     assert "secret-key" not in (private / "news.jsonl").read_text()
     assert (private / "news.jsonl").stat().st_mode & 0o777 == 0o600
 
+def test_failure_code_is_allowlisted_and_sanitized(tmp_path, monkeypatch):
+    contact = tmp_path / "contact"
+    contact.write_text("test@example.invalid")
+    contact.chmod(0o600)
+    monkeypatch.setattr("scripts.v3_collector.SEC_CONTACT", contact)
+    private = tmp_path / "receipts"
+    def failure(*args, **kwargs):
+        return SimpleNamespace(returncode=1, stdout="", stderr="secret:abc SEC acceptance clocks disagree")
+    result = run_source("sec", state=private, invoke=failure, now=lambda: NOW)
+    assert result["error_code"] == "sec_clock_mismatch"
+    assert "secret:abc" not in (private / "sec.jsonl").read_text()
+    result = health(state=private, snapshots=tmp_path, at=NOW)
+    assert result["sources"]["sec"]["last_error_code"] == "sec_clock_mismatch"
+
 
 def test_health_requires_successful_recent_both_sources_and_valid_snapshot(tmp_path, monkeypatch):
     contact = tmp_path / "contact"
