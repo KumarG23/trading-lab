@@ -119,7 +119,9 @@ def main() -> None:
     STORE.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(STORE, 0o700)
     with (STORE / ".lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        # Intake and resolution can overlap at the close; serialize rather than
+        # failing a scheduled run because its sibling owns the private ledger.
+        fcntl.flock(lock, fcntl.LOCK_EX)
         data = client()
         if args.action == "intake":
             events = load_ledger(ROOT / "data/events/catalysts-v1.jsonl")
