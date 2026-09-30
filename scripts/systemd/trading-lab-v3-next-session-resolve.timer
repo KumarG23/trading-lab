@@ -1,0 +1,11 @@
+[Unit]
+Description=Resolve V3 next-session offline IEX outcomes after close on weekdays
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 16:30:00
+AccuracySec=30s
+Persistent=false
+Unit=trading-lab-v3-next-session-resolve.service
+
+[Install]
+WantedBy=timers.target

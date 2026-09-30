@@ -1,0 +1,11 @@
+[Unit]
+Description=Check V3 next-session IEX opening bars every minute 09:35–09:48 ET weekdays (no orders)
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 09:35..48:00
+AccuracySec=15s
+Persistent=false
+Unit=trading-lab-v3-next-session-intake.service
+
+[Install]
+WantedBy=timers.target

@@ -23,6 +23,30 @@ from trading_lab.market_calendar import XNYSCalendar  # noqa: E402
 from trading_lab.v3_news_history import instant  # noqa: E402
 from trading_lab.v3_universe import ELIGIBLE  # noqa: E402
 from trading_lab.v3_forward_rule import EFFECTIVE  # noqa: E402
+from trading_lab.v3_next_session_rule import next_session  # noqa: E402
+
+
+def next_session_summary(events: list[dict], store: Path, outcomes_dir: Path) -> str:
+    """Sanitized separate-lane denominator; never expose symbol, event text or paths."""
+    marker = store / 'activation.json'
+    if not marker.exists():
+        return 'Next-session v1: inactive (no successful activation); no prospective observations.\n'
+    activated = instant(json.loads(marker.read_text())['activated_at'])
+    eligible = {row['id'] for row in events if next_session(row, activated) is not None}
+    decisions = [json.loads(p.read_text()) for p in sorted(store.glob('*.json')) if p != marker]
+    valid = [p for p in decisions if p.get('event_id') in eligible
+             and p.get('rule') == 'v3-next-session-rule-v1']
+    statuses = Counter(p.get('status') for p in valid)
+    outcomes = [json.loads(p.read_text())['outcome'] for p in sorted(outcomes_dir.glob('*.json'))]
+    results = [r for r in outcomes if r.get('event_id') in {p['event_id'] for p in valid}]
+    result_counts = Counter(r.get('status') for r in results)
+    scored = [r for r in results if r.get('status') in ('resolved', 'no_fill')]
+    net = sum(r['net_dollars'] for r in scored)
+    return (f'Next-session v1 (cumulative shadow only): {len(eligible)} eligible events; '
+            f'{statuses.get("planned", 0)} plans, {statuses.get("abstain", 0)} abstentions, '
+            f'{len(eligible) - len(valid)} awaiting decisions; '
+            f'{dict(result_counts)} outcomes, ${net:.2f} across {len(scored)} scored plans. '
+            'Partial after-cost diagnostic, not an edge.\n')
 
 
 def report(*, at: datetime, collector: dict, events: list[dict], decisions: list[dict],
@@ -88,8 +112,17 @@ def main() -> None:
                                  'trading-lab-v3-forward-intake.timer', 'trading-lab-v3-forward-resolve.timer'],
                                 capture_output=True, text=True, timeout=5)
         forward_timers = timers.returncode == 0 and timers.stdout.splitlines() == ['active', 'active']
+        summary = next_session_summary(events, ROOT / 'data/events/v3-next-session-decisions',
+                                       ROOT / 'data/processed/v3-next-session/outcomes')
+        v1_timers = subprocess.run(['systemctl', '--user', 'is-active',
+                                    'trading-lab-v3-next-session-intake.timer',
+                                    'trading-lab-v3-next-session-resolve.timer'],
+                                   capture_output=True, text=True, timeout=5)
+        v1_running = v1_timers.returncode == 0 and v1_timers.stdout.splitlines() == ['active', 'active']
         print(report(at=now, collector=collector, events=events, decisions=decisions,
-                     outcomes=outcomes, activated=activated, safety=snapshot, forward_timers=forward_timers))
+                     outcomes=outcomes, activated=activated, safety=snapshot, forward_timers=forward_timers)
+              + ('\nNext-session timers: active.\n' if v1_running else '\nNext-session timers: DEGRADED — inspect user systemd units.\n')
+              + summary)
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError, subprocess.TimeoutExpired) as exc:
         # Never include raw provider or event text in delivered error output.
         print(f"⚠️ V3 daily research report could not verify data ({type(exc).__name__}). No outcome or order-safety claims.")

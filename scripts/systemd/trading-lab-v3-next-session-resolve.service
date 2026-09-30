@@ -1,0 +1,10 @@
+[Unit]
+Description=Resolve V3 next-session shadow outcomes after close (read-only, no orders)
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/neal/trading-lab
+ExecStart=/home/neal/trading-lab/.venv/bin/python -m scripts.v3_next_session_run resolve
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
