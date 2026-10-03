@@ -36,7 +36,8 @@ class _Text(HTMLParser):
 def sec_events(submissions: dict, *, cik: int, symbol: str, observed_at: datetime, fetch_document, lookback_days: int = 7, stats: dict | None = None) -> list[dict]:
     """Only Item 2.02 filings with a real EX-99.1 release; no cover-page proxy."""
     if stats is not None:
-        stats.update(item_202_recent=0, without_single_exhibit=0, skipped_cap=0, matched=0)
+        stats.update(item_202_recent=0, without_single_exhibit=0, skipped_cap=0,
+                     clock_double_offset=0, matched=0)
     if int(submissions["cik"]) != cik or symbol not in submissions.get("tickers", []):
         raise ValueError("SEC CIK/ticker mismatch")
     recent = submissions["filings"]["recent"]
@@ -69,15 +70,27 @@ def sec_events(submissions: dict, *, cik: int, symbol: str, observed_at: datetim
         match = re.search(r"<ACCEPTANCE-DATETIME>\s*(\d{14})", header)
         if not match:
             raise ValueError("SEC raw acceptance header missing")
-        # SEC submissions has been observed using BOTH conventions for the same
-        # accession: Z on the Eastern wall clock, then a corrected true UTC Z.
-        # Anchor on the raw Eastern header and accept only either exact clock.
+        # SEC submissions has used Eastern wall time, true UTC, and an erroneous
+        # second ET->UTC conversion. Anchor on the raw Eastern header; require
+        # a separate official filing detail page to corroborate that last case.
         raw_time = datetime.strptime(match.group(1), "%Y%m%d%H%M%S")
-        raw_utc = raw_time.replace(tzinfo=ZoneInfo("America/New_York")).astimezone(timezone.utc)
+        raw_local = raw_time.replace(tzinfo=ZoneInfo("America/New_York"))
+        raw_utc = raw_local.astimezone(timezone.utc)
         json_time = datetime.fromisoformat(recent["acceptanceDateTime"][i].replace("Z", "+00:00"))
         if not (json_time.replace(tzinfo=None) == raw_time
                 or (json_time.tzinfo is not None and json_time.astimezone(timezone.utc) == raw_utc)):
-            raise ValueError("SEC acceptance clocks disagree")
+            offset = raw_local.utcoffset()
+            if (offset is None or json_time.utcoffset() != timedelta(0)
+                    or json_time - raw_utc != -offset):
+                raise ValueError("SEC acceptance clocks disagree")
+            index = fetch_document(root + accession + "-index.htm")
+            index_match = re.search(
+                r'<div class="infoHead">Accepted</div>\s*<div class="info">(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})</div>',
+                index)
+            if not index_match or datetime.strptime(index_match.group(1), "%Y-%m-%d %H:%M:%S") != raw_time:
+                raise ValueError("SEC acceptance clocks disagree")
+            if stats is not None:
+                stats["clock_double_offset"] += 1
         accepted = raw_utc
         if accepted > observed_at.astimezone(timezone.utc):
             raise ValueError("future SEC acceptance time")

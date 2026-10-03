@@ -50,7 +50,14 @@ def test_late_session_event_records_abstention_without_bar_network(tmp_path):
     assert json.loads((tmp_path / ('a' * 64 + '.json')).read_text())['reason'] == 'outside_decision_window'
 
 
-def test_acquire_real_id_and_resolve_sparse_iex_fails_closed(tmp_path):
+def test_acquire_real_id_and_resolve_sparse_iex_fails_closed(tmp_path, monkeypatch):
+    # Receipt time is intentionally bounded by the real clock in production;
+    # keep this historical fixture's clock fixed as the calendar moves forward.
+    class FixtureClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return (SEEN + timedelta(minutes=2)).astimezone(tz)
+    monkeypatch.setattr('scripts.v3_forward_run.datetime', FixtureClock)
     event = EVENT
     store, outcomes = tmp_path / 'plans', tmp_path / 'outcomes'
     api = FakeBars([BAR])

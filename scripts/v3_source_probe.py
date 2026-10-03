@@ -49,7 +49,8 @@ def main():
         if not contact:
             parser.error("SEC_CONTACT_EMAIL required for SEC requests")
         events = []
-        coverage = {"item_202_recent": 0, "without_single_exhibit": 0, "skipped_cap": 0, "matched": 0}
+        coverage = {"item_202_recent": 0, "without_single_exhibit": 0, "skipped_cap": 0,
+                    "clock_double_offset": 0, "matched": 0}
         names = ([(args.symbol, args.cik)] if args.sec else
                  [(symbol, CIKS[symbol]) for symbol in (CORE if args.sec_core else sorted(ELIGIBLE))])
         for index, (symbol, cik) in enumerate(names):

@@ -54,7 +54,8 @@ def test_sec_item_202_only_and_true_availability():
                 else "<script>ignore</script><p>Quarterly earnings announced</p>")
     stats = {}
     events = sec_events(fixture(), cik=866787, symbol="AZO", observed_at=observed, fetch_document=fetch, stats=stats)
-    assert stats == {"item_202_recent": 1, "without_single_exhibit": 0, "skipped_cap": 0, "matched": 1}
+    assert stats == {"item_202_recent": 1, "without_single_exhibit": 0, "skipped_cap": 0,
+                     "clock_double_offset": 0, "matched": 1}
     assert len(events) == 1
     assert events[0]["text"] == "Quarterly earnings announced"
     assert len(calls) == 2 and calls[1] == events[0]["url"]
@@ -89,6 +90,32 @@ def test_sec_accepts_true_utc_submissions_clock_only_when_raw_header_agrees():
     assert result[0]['published_at'] == '2026-09-29T13:16:12+00:00'
     with pytest.raises(ValueError, match="acceptance clocks disagree"):
         sec_events(fixture(accepted="2026-09-29T13:16:13Z"), cik=866787, symbol="AZO",
+                   observed_at=observed, fetch_document=fetch)
+
+
+def test_sec_double_timezone_offset_requires_matching_official_index():
+    observed = datetime(2026, 9, 22, 22, tzinfo=timezone.utc)
+    calls = []
+    def fetch(url):
+        calls.append(url)
+        if url.endswith('.txt'):
+            return "<ACCEPTANCE-DATETIME>20260922123000\n<DOCUMENT>\n<TYPE>EX-99.1\n<FILENAME>release.htm\n"
+        if url.endswith('-index.htm'):
+            return '<div class="infoHead">Accepted</div><div class="info">2026-09-22 12:30:00</div>'
+        return '<p>Quarterly earnings announced</p>'
+    case = fixture(accepted="2026-09-22T20:30:00.000Z")  # SEC's erroneous ET -> UTC twice
+    stats = {}
+    events = sec_events(case, cik=866787, symbol="AZO", observed_at=observed, fetch_document=fetch, stats=stats)
+    assert len(events) == 1 and events[0]['published_at'] == '2026-09-22T16:30:00+00:00'
+    assert stats['clock_double_offset'] == 1
+    assert sum(url.endswith('-index.htm') for url in calls) == 1
+    def wrong_index(url):
+        result = fetch(url)
+        return result.replace('2026-09-22 12:30:00', '2026-09-22 12:30:01') if url.endswith('-index.htm') else result
+    with pytest.raises(ValueError, match='acceptance clocks disagree'):
+        sec_events(case, cik=866787, symbol="AZO", observed_at=observed, fetch_document=wrong_index)
+    with pytest.raises(ValueError, match='acceptance clocks disagree'):
+        sec_events(fixture(accepted="2026-09-22T20:30:01Z"), cik=866787, symbol="AZO",
                    observed_at=observed, fetch_document=fetch)
 
 
